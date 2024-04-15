@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Product</title>
+    <title>Edit Product</title>
 </head>
 <body>
-    <h2>Add Product</h2>
+    <h2>Edit Product</h2>
     <form method="POST" action="">
         {{ form.csrf_token }}
         {{ form.name.label }} {{ form.name }}
         {{ form.description.label }} {{ form.description }}
         {{ form.price.label }} {{ form.price }}
-        <button type="submit">Add Product</button>
+        <button type="submit">Update Product</button>
     </form>
 </body>
 </html>
