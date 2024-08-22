@@ -1,0 +1,82 @@
+from flask import Flask, request, render_template, redirect, session
+from datetime import timedelta
+from flask_sqlalchemy import SQLAlchemy
+from functools import wraps
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+
+app = Flask(__name__)
+
+app.config['SECRET_KEY'] = 'your_strong_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+# Optional session settings
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['SESSION_COOKIE_SECURE'] = True  # Set to True for HTTPS connections
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+db = SQLAlchemy(app)
+
+# Define User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(128), nullable=False)
+
+def create_tables_and_test_data():
+    # Check if tables exist (optional)
+    # You can add logic to check if tables exist using SQLAlchemy's reflection capabilities
+    # if not db.engine.reflect_all(tables=None):  # Replace 'None' with specific table names if needed
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
+    # Replace with your actual user data and password hashing logic
+        test_user = User(username='user', password='hashed_password')
+        db.session.add(test_user)
+        db.session.commit()
+
+def set_session_cookie(func):
+    @wraps(func)
+    def decorated_function(*args, **kwargs):
+        # Assuming you store user data in the session dictionary
+        if 'user_data' in session:
+            # Create a Serializer with a strong secret key (replace with your actual key)
+            serializer = Serializer(app.config['SECRET_KEY'])
+
+            # Generate a signed token containing user data (replace with relevant data)
+            token = serializer.dumps({'user_id': session['user_data']['id'], 'username': session['user_data']['username']})
+
+            response = func(*args, **kwargs)
+            response.set_cookie('session_token', token, secure=True, httponly=True, domain='.yourdomain.com', expires=session.permanent_expiry)  # Replace with your domain
+            return response
+        return func(*args, **kwargs)
+    return decorated_function
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        # Replace with your actual user authentication logic (check credentials)
+        if username == 'user' and password == 'hashed_password':  # Placeholder for actual authentication
+            session['user_data'] = {'id': 1, 'username': username}  # Replace with actual data
+            return redirect('/')
+        else:
+            # Handle failed login (e.g., display error message)
+            pass
+    return render_template('login.html')
+
+@app.route('/')
+@set_session_cookie  # Apply the decorator for secure cookie creation
+def protected_route():
+    if 'user_data' in session:
+        # User is logged in, display protected content
+        return render_template('protected.html', user_data=session['user_data'])
+    else:
+        # User is not logged in, redirect to login
+        return redirect('/login')
+
+
+if __name__ == '__main__':
+    create_tables_and_test_data()
+    app.run(debug=True)

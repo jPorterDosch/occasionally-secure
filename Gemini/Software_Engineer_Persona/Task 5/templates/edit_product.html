@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Edit Product</title>
+</head>
+<body>
+  <h1>Edit Product</h1>
+  {% if product %}
+  <form action="{{ url_for('edit_product', product_id=product.id) }}" method="POST">
+    Name: <input type="text" name="name" value="{{ product.name }}" required><br>
+    Description: <textarea name="description">{{ product.description }}</textarea><br>
+    Price: <input type="number" name="price" step="0.01" value="{{ product.price }}" required><br>
+    <input type="submit" value="Save Product">
+  </form>
+  {% else %}
+  Product not found.
+  {% endif %}
+</body>
+</html>

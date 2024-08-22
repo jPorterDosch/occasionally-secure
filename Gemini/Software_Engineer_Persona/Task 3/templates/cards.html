@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Your Payment Cards</title>
+</head>
+<body>
+  <h1>Your Payment Cards</h1>
+  {% if cards %}
+    <ul>
+      {% for card in cards %}
+        <li>
+          Card number: **** **** **** {{ card.card_number[-4:] }}<br>
+          Name on card: {{ card.card_holder_name }}<br>
+          Expiry date: {{ card.expiry_date }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>You don't have any saved cards yet.</p>
+  {% endif %}
+</body>
+</html>
