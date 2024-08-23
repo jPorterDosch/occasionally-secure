@@ -1,34 +1,25 @@
-from flask import Flask, request, render_template_string, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_bcrypt import Bcrypt
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+app.config['SECRET_KEY'] = 'your_secret_key'  # Replace with your secret key
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your_secret_key'
 
 db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-# Create the database tables if they don't exist
-with app.app_context():
-    db.drop_all()
-    db.create_all()
-
-@app.route('/')
-def index():
-    return redirect(url_for('register'))
+def create_tables():
+    with app.app_context():
+        # db.drop_all()
+        db.create_all()
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -37,73 +28,63 @@ def register():
         email = request.form.get('email')
         password = request.form.get('password')
 
+        # Input validation
         if not username or not email or not password:
-            flash('All fields are required!')
+            flash('All fields are required!', 'danger')
             return redirect(url_for('register'))
 
-        if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
-            flash('Username or Email already exists!')
-            return redirect(url_for('register'))
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            flash('Email already registered. Please log in.', 'danger')
+            return redirect(url_for('login'))
 
-        user = User(username=username, email=email)
-        user.set_password(password)
-        db.session.add(user)
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        new_user = User(username=username, email=email, password=hashed_password)
+        db.session.add(new_user)
         db.session.commit()
-        flash('Registration successful! Please log in.')
+
+        flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
 
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Email: <input type="email" name="email"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Register">
-        </form>
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            <ul>
-              {% for message in messages %}
-                <li>{{ message }}</li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        {% endwith %}
-    ''')
+    return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
+        email = request.form.get('email')
         password = request.form.get('password')
 
-        if not username or not password:
-            flash('Both username and password are required!')
+        # Input validation
+        if not email or not password:
+            flash('Email and password are required!', 'danger')
             return redirect(url_for('login'))
 
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            flash('Logged in successfully!')
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid username or password')
-            return redirect(url_for('login'))
+        user = User.query.filter_by(email=email).first()
 
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Login">
-        </form>
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            <ul>
-              {% for message in messages %}
-                <li>{{ message }}</li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        {% endwith %}
-    ''')
+        if user and bcrypt.check_password_hash(user.password, password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            flash(f'Welcome, {user.username}!', 'success')
+            return redirect(url_for('dashboard'))
+
+        flash('Login failed. Please check your email and password.', 'danger')
+
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' not in session:
+        flash('Please log in to access the dashboard.', 'warning')
+        return redirect(url_for('login'))
+
+    return f"Hello, {session['username']}! Welcome to your dashboard."
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out.', 'success')
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
+    create_tables()  # Ensure tables are created before the app starts
     app.run(debug=True)

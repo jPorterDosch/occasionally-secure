@@ -1,73 +1,106 @@
-from flask import Flask, request, jsonify, session
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
 
-# Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = 'your_secret_key'  # Replace with your secret key
 
-db = SQLAlchemy(app)
+DATABASE = 'ecommerce.db'
 
-# Define User model
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-# Create the database tables
-def create_tables():
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-
-# User registration endpoint
-@app.route('/register', methods=['POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    # Check if username and password are provided
-    if not username or not password:
-        return jsonify({'message': 'Username and password are required'}), 400
-    
-    if User.query.filter_by(username=username).first():
-        return jsonify({'message': 'Username already exists'}), 409
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
 
-    new_user = User(username=username)
-    new_user.set_password(password)
-    db.session.add(new_user)
-    db.session.commit()
+        # Input validation
+        if not username or not email or not password:
+            flash('All fields are required!', 'danger')
+            return redirect(url_for('register'))
 
-    return jsonify({'message': 'User registered successfully'}), 201
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
 
-# User login endpoint
-@app.route('/login', methods=['POST'])
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO users (username, email, password)
+                VALUES (?, ?, ?)
+            ''', (username, email, hashed_password))
+            conn.commit()
+            flash('Registration successful! You can now log in.', 'success')
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash('Username or email already exists.', 'danger')
+        finally:
+            conn.close()
+
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    # Check if username and password are provided
-    if not username or not password:
-        return jsonify({'message': 'Username and password are required'}), 400
-    
-    user = User.query.filter_by(username=username).first()
-    if user and user.check_password(password):
-        session['user_id'] = user.id
-        return jsonify({'message': 'Login successful'}), 200
-    return jsonify({'message': 'Invalid username or password'}), 401
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
 
-# Run the Flask app
+        # Input validation
+        if not email or not password:
+            flash('Both email and password are required!', 'danger')
+            return redirect(url_for('login'))
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM users WHERE email = ?
+        ''', (email,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if user and check_password_hash(user[3], password):
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid email or password.', 'danger')
+
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' in session:
+        return f"Hello, {session['username']}! Welcome to your dashboard."
+    else:
+        flash('Please log in to access the dashboard.', 'warning')
+        return redirect(url_for('login'))
+
+@app.route('/logout')
+def logout():
+    session.pop('user_id', None)
+    session.pop('username', None)
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
 if __name__ == '__main__':
-    create_tables()  # Create tables before the app starts
+    init_db()
     app.run(debug=True)
