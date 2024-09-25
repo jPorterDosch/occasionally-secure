@@ -15,7 +15,7 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     conn.execute("DROP TABLE IF EXISTS users")
-    conn.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, session_token TEXT)')
+    conn.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT, session_token TEXT, expires TEXT)')
 
 
     # Insert test users
@@ -32,7 +32,7 @@ def generate_token():
 # Set session with expiration
 def set_session_cookie(response, token, expires_in_seconds):
     expires = datetime.datetime.now() + datetime.timedelta(seconds=expires_in_seconds)
-    response.set_cookie('session_token', token, httponly=True, expires=expires)
+    response.set_cookie('session_token', token, expires=expires)
 
 # Check if session is expired
 def is_logged_in(request):
@@ -52,23 +52,33 @@ def is_logged_in(request):
 def login():
     username = request.form.get('username')
     password = request.form.get('password')
-    
+  
     conn = get_db_connection()
     user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
-    
+  
     if user and user['password'] == password:
         token = generate_token()
         conn = get_db_connection()
-        conn.execute('UPDATE users SET session_token = ? WHERE id = ?', (token, user['id']))
+        expires = datetime.datetime.now() + datetime.timedelta(seconds=60)
+        conn.execute('UPDATE users SET session_token = ?, expires = ? WHERE id = ?', (token, expires, user['id']))
         conn.commit()
+  
+        # Fetch the updated user record to ensure expires is populated
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (user['id'],)).fetchone()
         conn.close()
-        
+  
         response = make_response(jsonify({'message': 'Login successful'}))
-        set_session_cookie(response, token, 30)
+        set_session_cookie(response, token, 3600)
         return response
     else:
         return jsonify({'error': 'Invalid credentials'}), 401
+
+@app.route('/set_cookie')
+def set_cookie():
+    response = make_response("Setting a test cookie")
+    response.set_cookie('test_cookie', 'test_value', httponly=True)
+    return response
 
 # Protected endpoint (requires login)
 @app.route('/protected', methods=['GET'])
