@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Payment Card</title>
+</head>
+<body>
+    <h1>Add Payment Card</h1>
+    {{ form.hidden_tag() }}
+    {{ form.errors }}
+    <p>{{ form.card_number.label }} {{ form.card_number() }}</p>
+    <p>{{ form.cvv.label }} {{ form.cvv() }}</p>
+    <p>{{ form.expiration_month.label }} {{ form.expiration_month() }}</p>
+    <p>{{ form.expiration_year.label }} {{ form.expiration_year() }}</p>
+    <p>{{ form.name_on_card.label }} {{ form.name_on_card() }}</p>
+    <p>{{ form.billing_zip.label }} {{ form.billing_zip() }}</p>
+    <p><input type="submit" value="Add Card"></p>
+</body>
+</html>

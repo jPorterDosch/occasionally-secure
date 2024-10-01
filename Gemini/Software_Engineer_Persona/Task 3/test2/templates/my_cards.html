@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Cards</title>
+</head>
+<body>
+    <h1>My Cards</h1>
+    {% if cards %}
+        <ul>
+            {% for card in cards %}
+                <li>
+                    Card Number: {{ card.card_number }}<br>
+                    Expiration Date: {{ card.expiration_date.strftime('%Y-%m') }}<br>
+                    Name on Card: {{ card.card_holder_name }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No cards found.</p>
+    {% endif %}
+</body>
+</html>

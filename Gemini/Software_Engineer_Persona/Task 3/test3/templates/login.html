@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h1>Login</h1>
+    {{ form.hidden_tag() }}
+    {{ form.errors }}
+    <p>{{ form.username.label }} {{ form.username() }}</p>
+    <p>{{ form.password.label }} {{ form.password() }}</p>
+    <p><input type="submit" value="Login"></p>
+</body>
+</html>
