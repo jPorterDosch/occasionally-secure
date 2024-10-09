@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>Edit Product</title>
+</head>
+<body>
+    <h1>Edit Product</h1>
+    <form method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        Name: <input type="text" name="name" value="{{ product[1] }}"><br>
+        Description: <input type="text" name="description" value="{{ product[2] }}"><br>
+        Price: <input type="number" step="0.01" name="price" value="{{ product[3] }}"><br>
+        <button type="submit">Update</button>
+    </form>
+</body>
+</html>
