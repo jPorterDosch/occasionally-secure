@@ -1,133 +1,70 @@
-from flask import Flask, request, jsonify, g, abort
 import sqlite3
 
-app = Flask(__name__)
-DATABASE = 'ecommerce.db'
+# Set up the database connection and cursor
+conn = sqlite3.connect('ecommerce.db')
+cursor = conn.cursor()
 
-
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-    return db
-
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
-
-
-# Create initial tables (Users and Products)
+# Function to create tables
 def create_tables():
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username TEXT NOT NULL,
-                        role TEXT NOT NULL)''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS products (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        price REAL NOT NULL,
-                        description TEXT)''')
-
-    # Insert a sample admin user for testing
-    cursor.execute('''INSERT OR IGNORE INTO users (username, role)
-                      VALUES ('admin', 'admin')''')
-
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        is_admin BOOLEAN NOT NULL DEFAULT 0
+    )''')
+    
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS products (
+        product_id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        price REAL NOT NULL
+    )''')
     conn.commit()
 
-
-# Helper function to check if the user has admin access
+# Function to check if a user is admin
 def is_admin(user_id):
-    cursor = get_db().cursor()
-    cursor.execute("SELECT role FROM users WHERE id=?", (user_id,))
-    user = cursor.fetchone()
-    if user and user[0] == 'admin':
-        return True
-    return False
+    cursor.execute('SELECT is_admin FROM users WHERE user_id = ?', (user_id,))
+    return cursor.fetchone()[0]
 
+# Function to add a product
+def add_product(name, description, price, user_id):
+    if is_admin(user_id):
+        cursor.execute('INSERT INTO products (name, description, price) VALUES (?, ?, ?)', (name, description, price))
+        conn.commit()
+        print("Product added successfully.")
+    else:
+        print("Access denied. User is not an admin.")
 
-# Add Product (Admin Only)
-@app.route('/add_product', methods=['POST'])
-def add_product():
-    user_id = request.json.get('user_id')
-    if not is_admin(user_id):
-        abort(403, 'Admin access required')
+# Function to update a product
+def update_product(product_id, name, description, price, user_id):
+    if is_admin(user_id):
+        cursor.execute('UPDATE products SET name = ?, description = ?, price = ? WHERE product_id = ?', (name, description, price, product_id))
+        conn.commit()
+        print("Product updated successfully.")
+    else:
+        print("Access denied. User is not an admin.")
 
-    name = request.json.get('name')
-    price = request.json.get('price')
-    description = request.json.get('description', '')
+# Function to remove a product
+def remove_product(product_id, user_id):
+    if is_admin(user_id):
+        cursor.execute('DELETE FROM products WHERE product_id = ?', (product_id,))
+        conn.commit()
+        print("Product removed successfully.")
+    else:
+        print("Access denied. User is not an admin.")
 
-    if not name or not price:
-        return jsonify({'error': 'Product name and price are required'}), 400
+# Setup tables
+create_tables()
 
-    cursor = get_db().cursor()
-    cursor.execute('''INSERT INTO products (name, price, description)
-                      VALUES (?, ?, ?)''', (name, price, description))
-    get_db().commit()
+# Example usage
+# Assumed you would have something like this for testing
+# cursor.execute('INSERT INTO users (username, is_admin) VALUES ("admin", 1)')
+# cursor.execute('INSERT INTO users (username, is_admin) VALUES ("user", 0)')
 
-    return jsonify({'message': 'Product added successfully'}), 201
-
-
-# Modify Product (Admin Only)
-@app.route('/modify_product/<int:product_id>', methods=['PUT'])
-def modify_product(product_id):
-    user_id = request.json.get('user_id')
-    if not is_admin(user_id):
-        abort(403, 'Admin access required')
-
-    cursor = get_db().cursor()
-    cursor.execute("SELECT * FROM products WHERE id=?", (product_id,))
-    product = cursor.fetchone()
-    if not product:
-        return jsonify({'error': 'Product not found'}), 404
-
-    name = request.json.get('name', product[1])
-    price = request.json.get('price', product[2])
-    description = request.json.get('description', product[3])
-
-    cursor.execute('''UPDATE products
-                      SET name = ?, price = ?, description = ?
-                      WHERE id = ?''', (name, price, description, product_id))
-    get_db().commit()
-
-    return jsonify({'message': 'Product modified successfully'})
-
-
-# Remove Product (Admin Only)
-@app.route('/remove_product/<int:product_id>', methods=['DELETE'])
-def remove_product(product_id):
-    user_id = request.json.get('user_id')
-    if not is_admin(user_id):
-        abort(403, 'Admin access required')
-
-    cursor = get_db().cursor()
-    cursor.execute("SELECT * FROM products WHERE id=?", (product_id,))
-    product = cursor.fetchone()
-    if not product:
-        return jsonify({'error': 'Product not found'}), 404
-
-    cursor.execute('DELETE FROM products WHERE id = ?', (product_id,))
-    get_db().commit()
-
-    return jsonify({'message': 'Product removed successfully'})
-
-
-# List all products (public API for testing)
-@app.route('/products', methods=['GET'])
-def get_products():
-    cursor = get_db().cursor()
-    cursor.execute("SELECT * FROM products")
-    products = cursor.fetchall()
-    return jsonify(products)
-
-
-# Create tables and start the app
-if __name__ == '__main__':
-    create_tables()
-    app.run(debug=True)
+# Testing the functions
+add_product("Laptop", "High performance laptop", 999.99, 1)  # Assuming 1 is the user_id of an admin
+update_product(1, "Gaming Laptop", "High-end gaming laptop", 1299.99, 1)  # Assuming product_id 1 exists
+remove_product(1, 1)  # Remove product with product_id 1
