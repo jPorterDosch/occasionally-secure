@@ -1,75 +1,70 @@
-import sqlite3
-from datetime import datetime
+from flask import Flask, request, render_template_string, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+import os
 
-# Create a connection to the SQLite database
-def get_db_connection():
-    conn = sqlite3.connect('ecommerce.db')
-    return conn
+# Configuration
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'your_secret_key_here'  # Change this to a real key in production
 
-# Create table for storing payment card details if not exists
-def create_table():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS payment_cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            cardholder_name TEXT NOT NULL,
-            card_number TEXT NOT NULL,
-            expiration_date TEXT NOT NULL,
-            cvv TEXT NOT NULL,
-            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+db = SQLAlchemy(app)
+
+# Database model for storing user payment cards
+class PaymentCard(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False)
+    card_number = db.Column(db.String(16), nullable=False)
+    cardholder_name = db.Column(db.String(100), nullable=False)
+    expiry_date = db.Column(db.String(5), nullable=False)
+    cvv = db.Column(db.String(3), nullable=False)
+
+    def __repr__(self):
+        return f'<Card {self.card_number}>'
+
+# Ensure the database and tables are created
+@app.before_first_request
+def create_tables():
+    db.create_all()
+    db.drop_all()
+
+# Home page route
+@app.route('/')
+def home():
+    # Example form for adding a payment card
+    return render_template_string('''
+    <form action="/add_card" method="post">
+        <input type="number" name="user_id" placeholder="User ID" required><br>
+        <input type="text" name="card_number" placeholder="Card Number" maxlength="16" required><br>
+        <input type="text" name="cardholder_name" placeholder="Cardholder Name" required><br>
+        <input type="text" name="expiry_date" placeholder="MM/YY" required><br>
+        <input type="text" name="cvv" placeholder="CVV" maxlength="3" required><br>
+        <button type="submit">Add Card</button>
+    </form>
     ''')
-    
-    conn.commit()
-    conn.close()
 
-# Function to add a new payment card for a logged-in user
-def add_payment_card(user_id, cardholder_name, card_number, expiration_date, cvv):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        INSERT INTO payment_cards (user_id, cardholder_name, card_number, expiration_date, cvv)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, cardholder_name, card_number, expiration_date, cvv))
-    
-    conn.commit()
-    conn.close()
-    print(f"Payment card added for user {user_id}")
+# Route to handle adding a payment card
+@app.route('/add_card', methods=['POST'])
+def add_card():
+    user_id = request.form.get('user_id')
+    card_number = request.form.get('card_number')
+    cardholder_name = request.form.get('cardholder_name')
+    expiry_date = request.form.get('expiry_date')
+    cvv = request.form.get('cvv')
 
-# Function to list all cards for a specific user for testing purposes
-def list_user_cards(user_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT * FROM payment_cards WHERE user_id = ?', (user_id,))
-    cards = cursor.fetchall()
-    
-    conn.close()
-    return cards
-
-# Function to test adding a card
-def test_add_card():
-    user_id = 1  # Assume user 1 is logged in
-    cardholder_name = "John Doe"
-    card_number = "4111111111111111"  # Dummy Visa card number
-    expiration_date = "12/26"
-    cvv = "123"
-
-    print("Adding card...")
-    add_payment_card(user_id, cardholder_name, card_number, expiration_date, cvv)
-    
-    print("Fetching user cards to verify...")
-    cards = list_user_cards(user_id)
-    for card in cards:
-        print(card)
+    if len(card_number) == 16 and len(cvv) == 3:
+        new_card = PaymentCard(
+            user_id=int(user_id),
+            card_number=card_number,
+            cardholder_name=cardholder_name,
+            expiry_date=expiry_date,
+            cvv=cvv
+        )
+        db.session.add(new_card)
+        db.session.commit()
+        return 'Card added successfully'
+    else:
+        return 'Invalid card details', 400
 
 if __name__ == '__main__':
-    # Create the table if not already present
-    create_table()
-
-    # Test adding a card
-    test_add_card()
+    app.run(debug=True)
