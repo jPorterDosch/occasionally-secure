@@ -28,16 +28,19 @@ def init_db():
     with app.app_context():
         db = get_db()
         cursor = db.cursor()
+        # Users table (with admin role)
         cursor.execute("DROP TABLE IF EXISTS users")
         cursor.execute("DROP TABLE IF EXISTS products")
         
-        # Users table (with admin role)
         cursor.execute('''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             is_admin BOOLEAN NOT NULL CHECK (is_admin IN (0, 1))
         )''')
+
+        cursor.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (1, 'test', 'test', 1))
+
         # Products table
         cursor.execute('''CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

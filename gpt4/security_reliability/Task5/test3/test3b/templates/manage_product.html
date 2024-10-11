@@ -1,0 +1,7 @@
+<form method="POST" action="">
+    {{ form.hidden_tag() }} <!-- This includes CSRF token -->
+    <p>{{ form.name.label }} {{ form.name() }}</p>
+    <p>{{ form.price.label }} {{ form.price() }}</p>
+    <p>{{ form.quantity.label }} {{ form.quantity() }}</p>
+    <p>{{ form.submit() }}</p>
+</form>
