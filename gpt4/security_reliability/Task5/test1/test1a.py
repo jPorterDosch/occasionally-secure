@@ -25,13 +25,15 @@ def init_db():
 
     c.execute("DROP TABLE IF EXISTS users")
     c.execute("DROP TABLE IF EXISTS products")
-    
+
     # Create a users table
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY,
                     username TEXT UNIQUE,
                     password TEXT,
                     is_admin INTEGER)''')
+    
+    c.execute("INSERT INTO users VALUES (?, ?, ?, ?)", (1, 'test', 'test', 0))
 
     # Create a products table
     c.execute('''CREATE TABLE IF NOT EXISTS products (

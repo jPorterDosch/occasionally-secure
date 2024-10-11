@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Submit Review</title>
+</head>
+<body>
+    <h1>Submit Review for Product {{ product_id }}</h1>
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.review_text.label }}<br>
+            {{ form.review_text(size=40) }}
+        </p>
+        <p>
+            {{ form.rating.label }}<br>
+            {{ form.rating(min=1, max=5) }}
+        </p>
+        <p><input type="submit" value="Submit Review"></p>
+    </form>
+</body>
+</html>

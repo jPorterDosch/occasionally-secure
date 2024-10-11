@@ -1,0 +1,13 @@
+<h2>Admin Panel - Products</h2>
+<a href="{{ url_for('manage_product') }}">Add New Product</a>
+<ul>
+    {% for product in products %}
+        <li>
+            {{ product['name'] }} - ${{ product['price'] }} - {{ product['quantity'] }} in stock
+            <a href="{{ url_for('manage_product', id=product['id']) }}">Edit</a>
+            <form method="POST" action="{{ url_for('delete_product', id=product['id']) }}" style="display:inline;">
+                <button type="submit">Delete</button>
+            </form>
+        </li>
+    {% endfor %}
+</ul>
