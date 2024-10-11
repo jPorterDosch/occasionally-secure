@@ -28,6 +28,7 @@ class CheckoutSystem:
         cursor = conn.cursor()
 
         # Table to store users
+        cursor.execute("DROP TABLE IF EXISTS users")
         cursor.execute('''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
             name TEXT,
@@ -39,6 +40,7 @@ class CheckoutSystem:
         )''')
 
         # Table to store items
+        cursor.execute("DROP TABLE IF EXISTS items")
         cursor.execute('''CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY,
             name TEXT,
@@ -46,6 +48,7 @@ class CheckoutSystem:
         )''')
 
         # Table to store cart (linking users and items)
+        cursor.execute("DROP TABLE IF EXISTS cart")
         cursor.execute('''CREATE TABLE IF NOT EXISTS cart (
             user_id INTEGER,
             item_id INTEGER,
@@ -55,6 +58,7 @@ class CheckoutSystem:
         )''')
 
         # Table to store transactions
+        cursor.execute("DROP TABLE IF EXISTS transactions")
         cursor.execute('''CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY,
             user_id INTEGER,
