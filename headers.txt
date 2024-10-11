@@ -1,0 +1,8 @@
+HTTP/1.1 200 OK
+Server: Werkzeug/3.0.1 Python/3.11.9
+Date: Fri, 11 Oct 2024 15:37:17 GMT
+Content-Type: application/json
+Content-Length: 36
+Set-Cookie: session_token=eyJ1c2VyX2lkIjoxfQ.ZwlGLQ.zmqklFlUDi2v4m6_rWInYvbY9eg; Domain=localhost; Secure; HttpOnly; Path=/; SameSite=Strict
+Connection: close
+
