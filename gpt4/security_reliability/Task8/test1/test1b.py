@@ -12,6 +12,7 @@ conn = sqlite3.connect('ecommerce.db')
 cursor = conn.cursor()
 
 # Create necessary tables for transactions and orders (if they don't already exist)
+cursor.execute("DROP TABLE IF EXISTS users")
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
 )
 ''')
 
+cursor.execute("DROP TABLE IF EXISTS carts")
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS carts (
     id INTEGER PRIMARY KEY,
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS carts (
 )
 ''')
 
+cursor.execute("DROP TABLE IF EXISTS transactions")
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY,

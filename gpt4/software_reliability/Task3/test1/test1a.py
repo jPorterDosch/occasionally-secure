@@ -1,120 +1,50 @@
-from flask import Flask, request, redirect, render_template, session, url_for
-import sqlite3
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+import os
 
 app = Flask(__name__)
-app.secret_key = 'super_secret_key'  # Replace this with a real secret key
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-# Initialize the database and create tables if they don't exist
-def init_db():
-    conn = sqlite3.connect('ecommerce.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            password TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS payment_cards (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            card_number TEXT NOT NULL,
-            cardholder_name TEXT NOT NULL,
-            expiry_date TEXT NOT NULL,
-            cvv TEXT NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
+# Database model for User and PaymentCard
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
 
-# Route for user registration (assuming the user is already registered)
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = generate_password_hash(request.form['password'])
+class PaymentCard(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    card_number = db.Column(db.String(20), unique=True, nullable=False)
+    expiration_date = db.Column(db.String(5), nullable=False)
+    cvv = db.Column(db.String(3), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user = db.relationship('User', backref=db.backref('cards', lazy=True))
 
-        conn = sqlite3.connect('ecommerce.db')
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('login'))
-    return render_template('register.html')
-
-# Route for user login
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-
-        conn = sqlite3.connect('ecommerce.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
-        user = cursor.fetchone()
-        conn.close()
-
-        if user and check_password_hash(user[2], password):
-            session['user_id'] = user[0]
-            session['username'] = user[1]
-            return redirect(url_for('add_card'))
-        else:
-            return 'Invalid login credentials'
-    return render_template('login.html')
-
-# Route for adding a payment card
-@app.route('/add_card', methods=['GET', 'POST'])
-def add_card():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        card_number = request.form['card_number']
-        cardholder_name = request.form['cardholder_name']
-        expiry_date = request.form['expiry_date']
-        cvv = request.form['cvv']
-
-        conn = sqlite3.connect('ecommerce.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO payment_cards (user_id, card_number, cardholder_name, expiry_date, cvv)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (session['user_id'], card_number, cardholder_name, expiry_date, cvv))
-        conn.commit()
-        conn.close()
-
-        return 'Card added successfully!'
-    
-    return render_template('add_card.html')
-
-# Route for testing card addition
-@app.route('/test')
-def test():
-    return '''
-    <h2>Testing Card Addition:</h2>
-    <form method="post" action="/add_card">
-        Card Number: <input type="text" name="card_number"><br>
-        Cardholder Name: <input type="text" name="cardholder_name"><br>
-        Expiry Date: <input type="text" name="expiry_date" placeholder="MM/YY"><br>
-        CVV: <input type="text" name="cvv"><br>
-        <input type="submit" value="Add Card">
-    </form>
-    '''
-
-# Route for logging out
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
-# Initialize the database before the first request
+# Create the database and tables
 @app.before_first_request
-def initialize():
-    init_db()
+def create_tables():
+    db.create_all()
+    db.drop_all()
+
+# Route to add a payment card
+@app.route('/add_card', methods=['POST'])
+def add_card():
+    user_id = request.json['user_id']
+    card_number = request.json['card_number']
+    expiration_date = request.json['expiration_date']
+    cvv = request.json['cvv']
+
+    # Validate that the user exists
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Create and save the new card
+    new_card = PaymentCard(card_number=card_number, expiration_date=expiration_date, cvv=cvv, user_id=user_id)
+    db.session.add(new_card)
+    db.session.commit()
+    return jsonify({"message": "Card added successfully"}), 201
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)

@@ -1,73 +1,66 @@
-from flask import Flask, request, redirect, render_template_string, flash
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, request, jsonify
+from flask_bcrypt import Bcrypt
+import sqlite3
+import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to a real secret key in production
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+bcrypt = Bcrypt(app)
 
-db = SQLAlchemy(app)
+DATABASE = 'users.db'
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+def init_db():
+    db = get_db_connection()
+    db.execute("DROP TABLE IF EXISTS users")
+    db.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    ''')
+    db.commit()
+    db.close()
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-@app.before_first_request
-def create_tables():
-    db.create_all()
-
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if User.query.filter_by(username=username).first():
-            flash('Username already taken!')
-            return redirect('/register')
-        
-        new_user = User(username=username)
-        new_user.set_password(password)
-        db.session.add(new_user)
-        db.session.commit()
-        flash('User registered successfully!')
-        return redirect('/login')
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Register">
-        </form>
-    ''')
+    username = request.json['username']
+    password = request.json['password']
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    
+    db = get_db_connection()
+    try:
+        db.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_password))
+        db.commit()
+    except sqlite3.IntegrityError:
+        db.close()
+        return jsonify({"error": "Username already exists"}), 409
+    db.close()
+    return jsonify({"message": "User registered successfully"}), 201
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            flash('Logged in successfully!')
-            return redirect('/profile')
-        flash('Invalid username or password!')
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Login">
-        </form>
-    ''')
+    username = request.json['username']
+    password = request.json['password']
+    
+    db = get_db_connection()
+    user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    db.close()
 
-@app.route('/profile')
-def profile():
-    return 'Welcome to your profile!'
+    if user and bcrypt.check_password_hash(user['password'], password):
+        return jsonify({"message": "Login successful"}), 200
+    else:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+@app.route('/')
+def index():
+    return 'Welcome to the e-commerce platform!'
 
 if __name__ == '__main__':
+    if not os.path.exists(DATABASE):
+        init_db()
     app.run(debug=True)

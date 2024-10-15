@@ -1,80 +1,54 @@
-from flask import Flask, request, render_template_string, redirect, url_for, session
-import sqlite3
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'
+basedir = os.path.abspath(os.path.dirname(__file__))
+# Configuration of the database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'ecommerce.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
-DATABASE = 'site.db'
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
 
-def init_db():
-    with app.app_context():
-        db = get_db()
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
-            )
-        ''')
-        db.commit()
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
 
-def get_db():
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    return db
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
-@app.route('/')
-def index():
-    if 'username' in session:
-        return f'Logged in as {session["username"]}'
-    return 'You are not logged in'
+@app.before_first_request
+def create_tables():
+    db.create_all()
+    db.drop_all()
 
-@app.route('/register', methods=['GET', 'POST'])
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        db = get_db()
-        try:
-            db.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
-            db.commit()
-        except sqlite3.IntegrityError:
-            return 'Username already exists'
-        return redirect(url_for('login'))
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Register">
-        </form>
-    ''')
+    data = request.get_json()
+    username = data['username']
+    email = data['email']
+    password = data['password']
+    if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
+        return jsonify({'message': 'User already exists'}), 400
 
-@app.route('/login', methods=['GET', 'POST'])
+    new_user = User(username=username, email=email)
+    new_user.set_password(password)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'User registered successfully'}), 201
+
+@app.route('/login', methods=['POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        db = get_db()
-        user = db.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, password)).fetchone()
-        if user:
-            session['username'] = user['username']
-            return redirect(url_for('index'))
-        return 'Invalid username or password'
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Login">
-        </form>
-    ''')
-
-@app.route('/logout')
-def logout():
-    session.pop('username', None)
-    return redirect(url_for('index'))
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    if user and user.check_password(data['password']):
+        return jsonify({'message': 'Logged in successfully'}), 200
+    return jsonify({'message': 'Invalid username or password'}), 401
 
 if __name__ == '__main__':
-    if not os.path.exists(DATABASE):
-        init_db()
     app.run(debug=True)

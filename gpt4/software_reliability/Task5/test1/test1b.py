@@ -1,89 +1,116 @@
-from flask import Flask, request, jsonify, g
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-from functools import wraps
+from flask import Flask, request, redirect, url_for, render_template_string, abort
+import sqlite3
+import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+DATABASE = 'ecommerce.db'
 
-# User and Product models
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+def get_db():
+    db = sqlite3.connect(DATABASE)
+    db.row_factory = sqlite3.Row
+    return db
 
-class Product(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(200), nullable=False)
-    price = db.Column(db.Float, nullable=False)
+def init_db():
+    with app.app_context():
+        db = get_db()
+        with app.open_resource('schema.sql', mode='r') as f:
+            db.cursor().executescript(f.read())
+        db.commit()
 
-# Create the database
-db.create_all()
+@app.route('/')
+def index():
+    db = get_db()
+    products = db.execute('SELECT * FROM products').fetchall()
+    return render_template_string('''
+        <h1>Product Management</h1>
+        {% for product in products %}
+            <p>{{ product['name'] }} - {{ product['description'] }} - ${{ product['price'] }}
+            [<a href="{{ url_for('edit_product', product_id=product['id']) }}">Edit</a>]
+            [<a href="{{ url_for('delete_product', product_id=product['id']) }}">Delete</a>]</p>
+        {% endfor %}
+        <a href="{{ url_for('add_product') }}">Add New Product</a>
+        ''', products=products)
 
-# Utility to check if the user is an admin
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not g.user or not g.user.is_admin:
-            return jsonify({"message": "Admin access required."}), 403
-        return f(*args, **kwargs)
-    return decorated_function
+def check_admin(user_id):
+    db = get_db()
+    user = db.execute('SELECT is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
+    return user and user['is_admin'] == 1
 
-# Load user before each request
-@app.before_request
-def load_user():
-    user_id = request.args.get('user_id')  # Simulate user login via query param
-    g.user = User.query.get(user_id) if user_id else None
-
-# Add a product (Admin Only)
-@app.route('/add_product', methods=['POST'])
-@admin_required
+@app.route('/add', methods=['GET', 'POST'])
 def add_product():
-    data = request.get_json()
-    new_product = Product(name=data['name'], description=data['description'], price=data['price'])
-    db.session.add(new_product)
-    db.session.commit()
-    return jsonify({"message": "Product added successfully!"}), 201
+    if not check_admin(1):  # Assuming user_id '1' for demonstration; replace with actual user session management
+        abort(403)
+    if request.method == 'POST':
+        name = request.form['name']
+        description = request.form['description']
+        price = request.form['price']
+        db = get_db()
+        db.execute('INSERT INTO products (name, description, price) VALUES (?, ?, ?)', (name, description, price))
+        db.commit()
+        return redirect(url_for('index'))
+    return render_template_string('''
+        <h1>Add New Product</h1>
+        <form method="post">
+            Name: <input type="text" name="name"><br>
+            Description: <input type="text" name="description"><br>
+            Price: <input type="text" name="price"><br>
+            <input type="submit" value="Add Product">
+        </form>
+        <a href="{{ url_for('index') }}">Back</a>
+        ''')
 
-# Remove a product (Admin Only)
-@app.route('/remove_product/<int:product_id>', methods=['DELETE'])
-@admin_required
-def remove_product(product_id):
-    product = Product.query.get(product_id)
-    if product:
-        db.session.delete(product)
-        db.session.commit()
-        return jsonify({"message": "Product removed successfully!"}), 200
-    return jsonify({"message": "Product not found."}), 404
+@app.route('/edit/<int:product_id>', methods=['GET', 'POST'])
+def edit_product(product_id):
+    if not check_admin(1):
+        abort(403)
+    db = get_db()
+    if request.method == 'POST':
+        name = request.form['name']
+        description = request.form['description']
+        price = request.form['price']
+        db.execute('UPDATE products SET name = ?, description = ?, price = ? WHERE id = ?', (name, description, price, product_id))
+        db.commit()
+        return redirect(url_for('index'))
+    product = db.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
+    return render_template_string('''
+        <h1>Edit Product</h1>
+        <form method="post">
+            Name: <input type="text" name="name" value="{{ product['name'] }}"><br>
+            Description: <input type="text" name="description" value="{{ product['description'] }}"><br>
+            Price: <input type="text" name="price" value="{{ product['price'] }}"><br>
+            <input type="submit" value="Update Product">
+        </form>
+        <a href="{{ url_for('index') }}">Back</a>
+        ''', product=product)
 
-# Modify product information (Admin Only)
-@app.route('/modify_product/<int:product_id>', methods=['PUT'])
-@admin_required
-def modify_product(product_id):
-    product = Product.query.get(product_id)
-    if not product:
-        return jsonify({"message": "Product not found."}), 404
+@app.route('/delete/<int:product_id>')
+def delete_product(product_id):
+    if not check_admin(1):
+        abort(403)
+    db = get_db()
+    db.execute('DELETE FROM products WHERE id = ?', (product_id,))
+    db.commit()
+    return redirect(url_for('index'))
 
-    data = request.get_json()
-    product.name = data.get('name', product.name)
-    product.description = data.get('description', product.description)
-    product.price = data.get('price', product.price)
-
-    db.session.commit()
-    return jsonify({"message": "Product updated successfully!"}), 200
-
-# Example route to add a user (for testing)
-@app.route('/add_user', methods=['POST'])
-def add_user():
-    data = request.get_json()
-    new_user = User(username=data['username'], password=generate_password_hash(data['password']), is_admin=data.get('is_admin', False))
-    db.session.add(new_user)
-    db.session.commit()
-    return jsonify({"message": "User added successfully!"}), 201
+# Schema setup for SQLite database
+schema_sql = """
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS products;
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    is_admin INTEGER NOT NULL
+);
+CREATE TABLE products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    price REAL
+);
+INSERT INTO users (username, is_admin) VALUES ('admin', 1), ('user', 0);
+"""
 
 if __name__ == '__main__':
+    if not os.path.exists(DATABASE):
+        init_db()
     app.run(debug=True)

@@ -1,57 +1,70 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify
 import sqlite3
+from sqlite3 import Error
 
 app = Flask(__name__)
-DATABASE = 'payment_info.db'
 
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
+def create_connection(db_file):
+    """ create a database connection to the SQLite database specified by db_file """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)
     return conn
 
-def init_db():
-    conn = get_db_connection()
-    conn.execute('''CREATE TABLE IF NOT EXISTS cards (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        card_number TEXT NOT NULL,
-                        card_holder_name TEXT NOT NULL,
-                        expiration_date TEXT NOT NULL,
-                        cvv TEXT NOT NULL
-                    );''')
-    conn.commit()
-    conn.close()
+def create_table(conn, create_table_sql):
+    """ create a table from the create_table_sql statement """
+    try:
+        c = conn.cursor()
+        c.execute(create_table_sql)
+    except Error as e:
+        print(e)
 
-@app.route('/')
-def index():
-    return render_template_string('''
-        <form action="/add-card" method="post">
-            <input type="number" name="user_id" placeholder="User ID" required><br>
-            <input type="text" name="card_number" placeholder="Card Number" required><br>
-            <input type="text" name="card_holder_name" placeholder="Card Holder Name" required><br>
-            <input type="text" name="expiration_date" placeholder="Expiration Date" required><br>
-            <input type="text" name="cvv" placeholder="CVV" required><br>
-            <input type="submit" value="Add Card">
-        </form>
-    ''')
-
-@app.route('/add-card', methods=['POST'])
-def add_card():
-    conn = get_db_connection()
-    sql = ''' INSERT INTO cards (user_id, card_number, card_holder_name, expiration_date, cvv)
-              VALUES (?, ?, ?, ?, ?) '''
-    data = (
-        request.form['user_id'],
-        request.form['card_number'],
-        request.form['card_holder_name'],
-        request.form['expiration_date'],
-        request.form['cvv']
-    )
-    conn.execute(sql, data)
+def add_payment_card(conn, user_id, card_number, expiry_date, cvv):
+    """
+    Add a new payment card into the cards table
+    """
+    sql = ''' INSERT INTO cards(user_id, card_number, expiry_date, cvv)
+              VALUES(?,?,?,?) '''
+    cur = conn.cursor()
+    cur.execute(sql, (user_id, card_number, expiry_date, cvv))
     conn.commit()
-    conn.close()
-    return jsonify({'status': 'success', 'message': 'Card added successfully'})
+    return cur.lastrowid
+
+@app.route('/add_card', methods=['POST'])
+def handle_add_card():
+    request_data = request.get_json()
+    user_id = request_data['user_id']
+    card_number = request_data['card_number']
+    expiry_date = request_data['expiry_date']
+    cvv = request_data['cvv']
+
+    conn = create_connection('pythonsqlite.db')
+    with conn:
+        card_id = add_payment_card(conn, user_id, card_number, expiry_date, cvv)
+    return jsonify({'card_id': card_id}), 201
+
+@app.before_first_request
+def setup():
+    database = 'pythonsqlite.db'
+
+    sql_create_cards_table = """ CREATE TABLE IF NOT EXISTS cards (
+                                        id integer PRIMARY KEY,
+                                        user_id integer NOT NULL,
+                                        card_number text NOT NULL,
+                                        expiry_date text NOT NULL,
+                                        cvv text NOT NULL
+                                    ); """
+
+    # create a database connection
+    conn = create_connection(database)
+    if conn is not None:
+        # create cards table
+        create_table(conn, sql_create_cards_table)
+    else:
+        print("Error! cannot create the database connection.")
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)

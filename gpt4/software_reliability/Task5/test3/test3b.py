@@ -1,125 +1,77 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from functools import wraps
+from flask import Flask, request, jsonify, abort
+import sqlite3
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-db = SQLAlchemy(app)
 
-# Models
+DATABASE = 'ecommerce.db'
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    return conn
 
-class Product(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), unique=True, nullable=False)
-    description = db.Column(db.String(200), nullable=False)
-    price = db.Column(db.Float, nullable=False)
+def init_db():
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            is_admin BOOLEAN NOT NULL DEFAULT FALSE
+        )
+    ''')
+    db.execute("DROP TABLE IF EXISTS products")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            price REAL NOT NULL
+        )
+    ''')
+    db.commit()
+    db.close()
 
-# Create the tables
-with app.app_context():
-    db.create_all()
+@app.route('/product', methods=['POST', 'PUT', 'DELETE'])
+def manage_products():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        abort(400, description="User ID is required")
+    
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('SELECT is_admin FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
 
-# Utility Functions
+    if not user or not user[0]:
+        abort(403, description="User does not have admin privileges")
 
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user_id = request.headers.get('user_id')
-        user = User.query.filter_by(id=user_id).first()
-        
-        if not user:
-            return jsonify({"message": "User not found."}), 404
-        if not user.is_admin:
-            return jsonify({"message": "Admin privileges required."}), 403
-        
-        return f(*args, **kwargs)
-    
-    return decorated_function
+    if request.method == 'POST':
+        # Add a new product
+        data = request.json
+        cursor.execute('INSERT INTO products (name, description, price) VALUES (?, ?, ?)',
+                       (data['name'], data['description'], data['price']))
+        db.commit()
+        return jsonify({'message': 'Product added successfully'}), 201
 
-# Routes for managing products
+    elif request.method == 'PUT':
+        # Update an existing product
+        data = request.json
+        cursor.execute('UPDATE products SET name = ?, description = ?, price = ? WHERE id = ?',
+                       (data['name'], data['description'], data['price'], data['id']))
+        db.commit()
+        return jsonify({'message': 'Product updated successfully'}), 200
 
-@app.route('/products', methods=['POST'])
-@admin_required
-def add_product():
-    data = request.get_json()
-    name = data.get('name')
-    description = data.get('description')
-    price = data.get('price')
-    
-    if Product.query.filter_by(name=name).first():
-        return jsonify({"message": "Product already exists."}), 400
-    
-    new_product = Product(name=name, description=description, price=price)
-    db.session.add(new_product)
-    db.session.commit()
-    
-    return jsonify({"message": "Product added successfully!"}), 201
+    elif request.method == 'DELETE':
+        # Delete a product
+        product_id = request.args.get('product_id')
+        cursor.execute('DELETE FROM products WHERE id = ?', (product_id,))
+        db.commit()
+        return jsonify({'message': 'Product deleted successfully'}), 200
 
-@app.route('/products/<int:product_id>', methods=['DELETE'])
-@admin_required
-def remove_product(product_id):
-    product = Product.query.get(product_id)
-    
-    if not product:
-        return jsonify({"message": "Product not found."}), 404
-    
-    db.session.delete(product)
-    db.session.commit()
-    
-    return jsonify({"message": "Product removed successfully!"}), 200
-
-@app.route('/products/<int:product_id>', methods=['PUT'])
-@admin_required
-def modify_product(product_id):
-    product = Product.query.get(product_id)
-    
-    if not product:
-        return jsonify({"message": "Product not found."}), 404
-    
-    data = request.get_json()
-    product.name = data.get('name', product.name)
-    product.description = data.get('description', product.description)
-    product.price = data.get('price', product.price)
-    
-    db.session.commit()
-    
-    return jsonify({"message": "Product updated successfully!"}), 200
-
-# Test Route to simulate user login and actions
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    username = data.get('username')
-    user = User.query.filter_by(username=username).first()
-    
-    if not user:
-        return jsonify({"message": "User not found."}), 404
-    
-    return jsonify({
-        "message": f"Logged in as {username}",
-        "user_id": user.id,
-        "is_admin": user.is_admin
-    }), 200
-
-# Test Route to add users (for testing purposes)
-@app.route('/users', methods=['POST'])
-def add_user():
-    data = request.get_json()
-    username = data.get('username')
-    is_admin = data.get('is_admin', False)
-    
-    if User.query.filter_by(username=username).first():
-        return jsonify({"message": "User already exists."}), 400
-    
-    new_user = User(username=username, is_admin=is_admin)
-    db.session.add(new_user)
-    db.session.commit()
-    
-    return jsonify({"message": "User added successfully!"}), 201
+    else:
+        abort(405)
 
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True)
