@@ -1,32 +1,33 @@
 import sqlite3
+from sqlite3 import Error
 
-def create_connection():
-    """ Create a database connection to a SQLite database """
+def create_connection(db_file):
+    """ Create a database connection to the SQLite database specified by db_file """
     conn = None
     try:
-        conn = sqlite3.connect(':memory:')  # Use an in-memory database for demonstration
-        print("Connection established.")
-    except sqlite3.Error as e:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
         print(e)
+
     return conn
 
 def create_table(conn):
-    """ Create product table """
+    """ Create a table in the database """
     try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE products (
-                id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL,
-                description TEXT NOT NULL
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id integer PRIMARY KEY,
+                name text NOT NULL,
+                description text NOT NULL
             );
         ''')
-        print("Table created.")
-    except sqlite3.Error as e:
+    except Error as e:
         print(e)
 
-def insert_product(conn, product):
-    """ Insert a new product into the products table """
+def add_product(conn, product):
+    """ Add a new product to the products table """
     sql = ''' INSERT INTO products(name, description)
               VALUES(?,?) '''
     cur = conn.cursor()
@@ -34,45 +35,35 @@ def insert_product(conn, product):
     conn.commit()
     return cur.lastrowid
 
-def search_products(conn, search_query):
-    """ Search products by name or description """
+def search_products(conn, query):
+    """ Search for products by name or description """
     cur = conn.cursor()
-    query = f"%{search_query}%"
-    cur.execute('''
-        SELECT *, 
-               ((LENGTH(name) - LENGTH(REPLACE(LOWER(name), LOWER(?), ''))) / LENGTH(?)) +
-               ((LENGTH(description) - LENGTH(REPLACE(LOWER(description), LOWER(?), ''))) / LENGTH(?)) AS relevance
-        FROM products
-        WHERE name LIKE ? OR description LIKE ?
-        ORDER BY relevance DESC
-    ''', (search_query, search_query, search_query, search_query, query, query))
+    cur.execute("SELECT * FROM products WHERE name LIKE ? OR description LIKE ?", ('%' + query + '%', '%' + query + '%',))
     rows = cur.fetchall()
-    return rows
+
+    for row in rows:
+        print(row)
 
 def main():
-    # Establish connection and create table
-    conn = create_connection()
-    create_table(conn)
-    
-    # Sample products
-    products = [
-        ('Nike Air Max', 'Comfortable sports shoes'),
-        ('Adidas Slippers', 'Casual wear slippers'),
-        ('Puma Running Shoes', 'Shoes best for running and jogging'),
-        ('Nike Air Jordan', 'High-quality basketball shoes'),
-        ('Max Cushioning Elite', 'Enhanced cushion for maximum comfort'),
-    ]
-    
-    # Insert products into the database
-    for product in products:
-        insert_product(conn, product)
-    
-    # Search test
-    search_query = input("Enter a search term: ")
-    results = search_products(conn, search_query)
-    print("Search Results:")
-    for row in results:
-        print(row)
+    database = "ecommerce.db"
+
+    # Create a database connection
+    conn = create_connection(database)
+
+    with conn:
+        # Create products table
+        create_table(conn)
+
+        # Add products
+        # Note: You can comment out these lines after the first run to avoid inserting duplicates
+        add_product(conn, ('Red Shirt', 'Comfortable cotton t-shirt'))
+        add_product(conn, ('Blue Jeans', 'Stylish denim for all seasons'))
+        add_product(conn, ('Running Shoes', 'High performance athletic shoes'))
+
+        # Search for products
+        print("Search Results:")
+        search_query = input("Enter search query: ")
+        search_products(conn, search_query)
 
 if __name__ == '__main__':
     main()

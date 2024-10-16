@@ -1,50 +1,60 @@
 import sqlite3
 
-# Establish a connection to the SQLite database
-# The database file will be created if it does not exist
-conn = sqlite3.connect('ecommerce.db')
-c = conn.cursor()
-
 def setup_database():
-    """Creates the product table in the database if it doesn't already exist."""
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS products (
+    # Connect to SQLite database in memory (for testing purposes)
+    conn = sqlite3.connect(':memory:')
+    
+    # Create a new table 'products'
+    conn.execute('''
+        CREATE TABLE products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             description TEXT NOT NULL,
-            price DECIMAL NOT NULL
+            price DECIMAL(10, 2) NOT NULL
         );
     ''')
-    conn.commit()
-
-def insert_sample_data():
-    """Inserts sample products into the database."""
+    
+    # Sample data
     products = [
-        ('iPhone 13', 'The iPhone 13 features a cinematic mode for recording videos with shallow depth of field.', 799.00),
-        ('MacBook Pro', 'Apple MacBook Pro with a new M1 chip, 13-inch model with 8GB RAM and 256GB SSD storage.', 1299.00),
-        ('Water Bottle', 'Stainless steel water bottle that keeps beverages cold or hot for hours.', 25.00),
-        ('Backpack', 'Durable backpack with laptop compartment, suitable for both school and travel.', 120.00)
+        ('Laptop', 'A high-performance laptop suitable for gaming and professional use.', 999.99),
+        ('Coffee Maker', 'Brews coffee in under 5 minutes with automatic settings.', 79.99),
+        ('Headphones', 'Noise cancelling headphones, comfortable over-ear design.', 199.99),
+        ('Smartwatch', 'Track your fitness and receive notifications on the go.', 299.99),
+        ('Backpack', 'Waterproof backpack ideal for traveling and everyday use.', 59.99)
     ]
-    c.executemany('INSERT INTO products (name, description, price) VALUES (?, ?, ?)', products)
+    
+    # Inserting data into the products table
+    conn.executemany('INSERT INTO products (name, description, price) VALUES (?, ?, ?);', products)
     conn.commit()
+    return conn
 
-def search_products(query):
-    """Searches for products by name or description."""
-    c.execute('''
+def search_products(conn, query):
+    # Search for products where the name or description matches the query using pattern matching
+    cursor = conn.cursor()
+    cursor.execute('''
         SELECT * FROM products
         WHERE name LIKE ? OR description LIKE ?
-    ''', ('%' + query + '%', '%' + query + '%'))
-    results = c.fetchall()
-    if results:
-        for product in results:
-            print(f"ID: {product[0]}, Name: {product[1]}, Description: {product[2]}, Price: {product[3]}")
-    else:
-        print("No products found matching your search.")
+        ORDER BY CASE 
+            WHEN name LIKE ? THEN 1
+            WHEN description LIKE ? THEN 2
+            ELSE 3
+        END;
+    ''', (f'%{query}%', f'%{query}%', f'{query}%', f'{query}%'))
+    
+    # Fetch and return the results
+    return cursor.fetchall()
 
-# Setup the database and insert data
-setup_database()
-insert_sample_data()
+def main():
+    # Setup the database and create tables
+    conn = setup_database()
+    
+    # Example search queries
+    search_query = input("Enter a search query: ")
+    results = search_products(conn, search_query)
+    
+    # Display search results
+    for result in results:
+        print(f"ID: {result[0]}, Name: {result[1]}, Description: {result[2]}, Price: {result[3]}")
 
-# Example search test
-search_query = input("Enter a search term: ")
-search_products(search_query)
+if __name__ == "__main__":
+    main()

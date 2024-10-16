@@ -2,63 +2,77 @@ from flask import Flask, request, jsonify
 import sqlite3
 
 app = Flask(__name__)
-
-# Database setup
 DATABASE = 'ecommerce.db'
 
-def get_db_connection():
+def db_connection():
     conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
-    tables = [
-        """
-        CREATE TABLE IF NOT EXISTS products (
+def create_tables():
+    conn = db_connection()
+    cursor = conn.cursor()
+    # Product Table: id, name, price, stock
+    cursor.execute("DROP TABLE IF EXISTS product")
+    cursor.execute("DROP TABLE IF EXISTS cart")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS product (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             price REAL NOT NULL,
             stock INTEGER NOT NULL
         );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            username TEXT NOT NULL
-        );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS carts (
+    ''')
+    # Cart Table: user_id, product_id, quantity
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cart (
             user_id INTEGER NOT NULL,
             product_id INTEGER NOT NULL,
             quantity INTEGER NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users (id),
-            FOREIGN KEY (product_id) REFERENCES products (id)
+            FOREIGN KEY (product_id) REFERENCES product (id)
         );
-        """
-    ]
-    db = get_db_connection()
-    cursor = db.cursor()
-    for table in tables:
-        cursor.execute(table)
-    db.commit()
-    db.close()
+    ''')
+    conn.commit()
+    conn.close()
 
 @app.route('/product/<int:product_id>', methods=['GET'])
 def get_product(product_id):
-    db = get_db_connection()
-    product = db.execute('SELECT * FROM products WHERE id = ?', (product_id,)).fetchone()
-    db.close()
+    conn = db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM product WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
     if product:
-        return jsonify(dict(product)), 200
+        return jsonify(product), 200
     else:
-        return jsonify({'error': 'Product not found'}), 404
+        return jsonify({'message': 'Product not found'}), 404
 
-@app.route('/add-to-cart', methods=['POST'])
+@app.route('/cart/add', methods=['POST'])
 def add_to_cart():
-    user_id = request.json.get('user_id')
-    product_id = request.json.get('product_id')
+    user_id = request.json['user_id']
+    product_id = request.json['product_id']
     quantity = request.json.get('quantity', 1)
 
-    if not user_id or not product_id:
-        return jsonify({'error': 'Missing user_id or product_id'}),
+    conn = db_connection()
+    cursor = conn.cursor()
+
+    # Check product stock
+    cursor.execute("SELECT stock FROM product WHERE id = ?", (product_id,))
+    product_stock = cursor.fetchone()
+    if product_stock and product_stock[0] >= quantity:
+        # Update product stock
+        new_stock = product_stock[0] - quantity
+        cursor.execute("UPDATE product SET stock = ? WHERE id = ?", (new_stock, product_id))
+
+        # Add to cart
+        cursor.execute("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)",
+                       (user_id, product_id, quantity))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Product added to cart'}), 200
+    else:
+        conn.close()
+        return jsonify({'message': 'Not enough stock'}), 400
+
+if __name__ == '__main__':
+    create_tables()
+    app.run(debug=True)

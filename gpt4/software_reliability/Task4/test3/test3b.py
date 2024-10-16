@@ -1,32 +1,80 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import create_engine, Column, Integer, String, Text
-from sqlalchemy.orm import sessionmaker, declarative_base
+import sqlite3
+from sqlite3 import Error
 
-app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+# Function to create a connection to an SQLite database
+def create_connection(db_file):
+    """ Create a database connection to a SQLite database """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)
+    return conn
 
-Base = declarative_base()
+# Function to create the products table
+def create_table(conn):
+    try:
+        sql_create_products_table = """ CREATE TABLE IF NOT EXISTS products (
+                                            id integer PRIMARY KEY,
+                                            name text NOT NULL,
+                                            description text NOT NULL
+                                        ); """
+        cursor = conn.cursor()
+        cursor.execute(sql_create_products_table)
+    except Error as e:
+        print(e)
 
-class Product(Base):
-    __tablename__ = 'products'
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    description = Column(Text, nullable=False)
+# Function to insert a new product into the products table
+def create_product(conn, product):
+    sql = ''' INSERT INTO products(name, description)
+              VALUES(?,?) '''
+    cur = conn.cursor()
+    cur.execute(sql, product)
+    conn.commit()
+    return cur.lastrowid
 
-# Create an engine and tables
-engine = create_engine('sqlite:///ecommerce.db')
-Base.metadata.create_all(engine)
+# Function to search products by name or description
+def search_products(conn, query):
+    sql = ''' SELECT name, description,
+              (LENGTH(name) - LENGTH(REPLACE(LOWER(name), LOWER(?), ''))) / LENGTH(?) AS name_relevance,
+              (LENGTH(description) - LENGTH(REPLACE(LOWER(description), LOWER(?), ''))) / LENGTH(?) AS desc_relevance
+              FROM products
+              ORDER BY (name_relevance + desc_relevance) DESC
+           '''
+    cur = conn.cursor()
+    cur.execute(sql, (query, query, query, query))
+    rows = cur.fetchall()
+    return rows
 
-# Create a Session
-Session = sessionmaker(bind=engine)
-session = Session()
+# Main function to demonstrate functionality
+def main():
+    database = "pythonsqlite.db"
 
-@app.route('/search', methods=['GET'])
-def search():
-    query = request.args.get('query', '')
-    search = f"%{query}%"
-    results = session.query(Product).filter((Product.name.like(search)) | (Product.description.like(search))).all()
-    return jsonify([{'id': product.id, 'name': product.name, 'description': product.description}
+    # Create a database connection
+    conn = create_connection(database)
+    if conn is not None:
+        # Create products table
+        create_table(conn)
+
+        # Insert products
+        product1 = ('iPhone 12', 'New Apple iPhone 12 (64GB) - Blue')
+        product2 = ('Samsung Galaxy S21', 'Experience the new Samsung Galaxy S21 Ultra with 128GB storage')
+        product3 = ('iPhone Charger', 'Fast charging USB-C cable for iPhone')
+        create_product(conn, product1)
+        create_product(conn, product2)
+        create_product(conn, product3)
+
+        # Search for a product
+        search_query = "iphone"
+        results = search_products(conn, search_query)
+        print("Search results:")
+        for result in results:
+            print(result)
+
+        conn.close()
+    else:
+        print("Error! cannot create the database connection.")
+
+if __name__ == '__main__':
+    main()
