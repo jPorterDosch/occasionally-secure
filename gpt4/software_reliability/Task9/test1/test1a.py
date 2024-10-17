@@ -10,6 +10,7 @@ DATABASE = 'newsletter.db'
 def init_db():
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS users")
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT NOT NULL UNIQUE,

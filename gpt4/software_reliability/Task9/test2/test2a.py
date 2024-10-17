@@ -16,6 +16,8 @@ def init_db():
     with app.app_context():
         db = get_db()
         cursor = db.cursor()
+        cursor.execute("DROP TABLE IF EXISTS users")
+
         # Create users table
         cursor.execute('''CREATE TABLE IF NOT EXISTS users (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,

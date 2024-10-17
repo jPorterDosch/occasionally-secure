@@ -1,101 +1,66 @@
-from flask import Flask, request, redirect, make_response, render_template_string
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, timedelta
-import uuid
+from flask import Flask, request, session, redirect, url_for, abort, render_template_string
+import sqlite3
+import os
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # Change to a real secret key in production
 
-# Configure the SQLite database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'secret_key_for_session_management'  # Replace with a secure key
+DATABASE = 'users.db'
 
-# Initialize the database
-db = SQLAlchemy(app)
+def init_db():
+    """ Initialize the database and create the necessary tables. """
+    if not os.path.exists(DATABASE):
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+        ''')
+        # Adding a test user
+        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', ('testuser', 'testpass'))
+        conn.commit()
+        conn.close()
 
-# User model for the database
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(50), nullable=False)
-    session_token = db.Column(db.String(100), nullable=True)
+@app.route('/')
+def home():
+    """ Home page that redirects to login if not authenticated. """
+    if 'username' in session:
+        return f'Welcome {session["username"]}! <a href="/logout">Logout</a>'
+    return 'You are not logged in. <br><a href="/login">Login</a>'
 
-# Create all database tables (if not already created)
-with app.app_context():
-    db.create_all()
-
-# Sample login page (for testing purposes)
-login_page = """
-    <h2>Login</h2>
-    <form action="/login" method="post">
-        <label for="username">Username:</label><br>
-        <input type="text" id="username" name="username"><br>
-        <label for="password">Password:</label><br>
-        <input type="password" id="password" name="password"><br><br>
-        <input type="submit" value="Login">
-    </form>
-"""
-
-# Function to create a new session token
-def create_session_token():
-    return str(uuid.uuid4())
-
-# Route to display login page
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """ Login form and authentication logic. """
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-
-        # Authenticate the user
-        user = User.query.filter_by(username=username, password=password).first()
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        c.execute('SELECT * FROM users WHERE username=? AND password=?', (username, password))
+        user = c.fetchone()
+        conn.close()
         if user:
-            # Invalidate previous sessions by generating a new session token
-            new_token = create_session_token()
-            user.session_token = new_token
-            db.session.commit()
-
-            # Set a cookie that expires in 1 hour
-            resp = make_response(redirect('/dashboard'))
-            expires = datetime.utcnow() + timedelta(hours=1)
-            resp.set_cookie('session_token', new_token, expires=expires, httponly=True, domain=None)
-
-            return resp
+            session['username'] = user[1]
+            return redirect(url_for('home'))
         else:
-            return "Invalid credentials", 403
-    return render_template_string(login_page)
+            return 'Invalid username/password'
+    return '''
+        <form method="post">
+            Username: <input type="text" name="username"><br>
+            Password: <input type="password" name="password"><br>
+            <input type="submit" value="Login">
+        </form>
+    '''
 
-# Route to display a protected dashboard
-@app.route('/dashboard')
-def dashboard():
-    session_token = request.cookies.get('session_token')
-
-    if not session_token:
-        return redirect('/login')
-
-    # Validate session token in the database
-    user = User.query.filter_by(session_token=session_token).first()
-    if user:
-        return f"Welcome, {user.username}! You are logged in."
-    else:
-        return redirect('/login')
-
-# Route to handle logout
 @app.route('/logout')
 def logout():
-    resp = make_response(redirect('/login'))
-    # Invalidate the session cookie by setting its expiration date to a past time
-    resp.set_cookie('session_token', '', expires=0)
-    return resp
+    """ Logout logic that clears the session. """
+    session.pop('username', None)
+    return redirect(url_for('home'))
 
-# Add sample user to test login (only once)
-@app.before_first_request
-def add_sample_user():
-    if not User.query.filter_by(username='testuser').first():
-        new_user = User(username='testuser', password='testpass')
-        db.session.add(new_user)
-        db.session.commit()
-
-# Start the Flask app
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True)

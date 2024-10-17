@@ -1,54 +1,101 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
 
+# Initialize the Flask application
 app = Flask(__name__)
-basedir = os.path.abspath(os.path.dirname(__file__))
-# Configuration of the database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'ecommerce.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+app.secret_key = 'your_secret_key'  # Needed for session management
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+# Database file path
+DATABASE = 'ecommerce_users.db'
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+# Function to initialize and create the users table if it doesn't exist
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-@app.before_first_request
-def create_tables():
-    db.create_all()
-    db.drop_all()
 
-@app.route('/register', methods=['POST'])
+# Route to render the registration form
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    data = request.get_json()
-    username = data['username']
-    email = data['email']
-    password = data['password']
-    if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
-        return jsonify({'message': 'User already exists'}), 400
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
 
-    new_user = User(username=username, email=email)
-    new_user.set_password(password)
-    db.session.add(new_user)
-    db.session.commit()
-    return jsonify({'message': 'User registered successfully'}), 201
+        # Hash the password before storing it
+        hashed_password = generate_password_hash(password)
 
-@app.route('/login', methods=['POST'])
+        try:
+            conn = sqlite3.connect(DATABASE)
+            cursor = conn.cursor()
+
+            # Insert the new user into the database
+            cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)",
+                           (username, hashed_password))
+            conn.commit()
+            conn.close()
+            flash('Registration successful! You can now log in.', 'success')
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash('Username already exists. Please try another.', 'danger')
+            return redirect(url_for('register'))
+    return render_template('register.html')
+
+
+# Route to render the login form and handle login
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    data = request.get_json()
-    user = User.query.filter_by(username=data['username']).first()
-    if user and user.check_password(data['password']):
-        return jsonify({'message': 'Logged in successfully'}), 200
-    return jsonify({'message': 'Invalid username or password'}), 401
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if user and check_password_hash(user[2], password):
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Invalid credentials. Please try again.', 'danger')
+
+    return render_template('login.html')
+
+
+# Route for user dashboard (accessible only if logged in)
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' in session:
+        return f'Welcome to your dashboard, {session["username"]}!'
+    else:
+        flash('You need to log in first!', 'danger')
+        return redirect(url_for('login'))
+
+
+# Route to handle user logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
 
 if __name__ == '__main__':
+    # Initialize the database before starting the app
+    init_db()
     app.run(debug=True)

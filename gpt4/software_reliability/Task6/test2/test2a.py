@@ -3,39 +3,6 @@ import sqlite3
 
 app = Flask(__name__)
 
-def db_connection():
-    conn = None
-    try:
-        conn = sqlite3.connect('ecommerce.db')
-    except sqlite3.error as e:
-        print(e)
-    return conn
-
-@app.route('/add_review', methods=['POST'])
-def add_review():
-    user_id = request.form['user_id']
-    product_id = request.form['product_id']
-    review_text = request.form['review_text']
-    review_score = request.form['review_score']
-    
-    conn = db_connection()
-    cursor = conn.cursor()
-
-    # Check if the user has purchased the product
-    cursor.execute("SELECT * FROM purchases WHERE user_id=? AND product_id=?", (user_id, product_id))
-    purchase = cursor.fetchone()
-    
-    if purchase:
-        cursor.execute("INSERT INTO reviews (user_id, product_id, review_text, review_score) VALUES (?, ?, ?, ?)", 
-                       (user_id, product_id, review_text, review_score))
-        conn.commit()
-        return jsonify(message="Review added successfully"), 200
-    else:
-        return jsonify(message="User has not purchased this product"), 403
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
 def create_connection(db_file):
     """ Create a database connection to the SQLite database """
     conn = None
@@ -100,6 +67,11 @@ def setup_database():
 
     # create tables
     if conn is not None:
+        create_table(conn, "DROP TABLE IF EXISTS users")
+        create_table(conn, "DROP TABLE IF EXISTS products")
+        create_table(conn, "DROP TABLE IF EXISTS purchases")
+        create_table(conn, "DROP TABLE IF EXISTS reviews")
+
         create_table(conn, sql_create_users_table)
         create_table(conn, sql_create_products_table)
         create_table(conn, sql_create_purchases_table)
@@ -108,5 +80,36 @@ def setup_database():
     else:
         print("Error! cannot create the database connection.")
 
+def db_connection():
+    conn = None
+    try:
+        conn = sqlite3.connect('ecommerce.db')
+    except sqlite3.error as e:
+        print(e)
+    return conn
+
+@app.route('/add_review', methods=['POST'])
+def add_review():
+    user_id = request.form['user_id']
+    product_id = request.form['product_id']
+    review_text = request.form['review_text']
+    review_score = request.form['review_score']
+    
+    conn = db_connection()
+    cursor = conn.cursor()
+
+    # Check if the user has purchased the product
+    cursor.execute("SELECT * FROM purchases WHERE user_id=? AND product_id=?", (user_id, product_id))
+    purchase = cursor.fetchone()
+    
+    if purchase:
+        cursor.execute("INSERT INTO reviews (user_id, product_id, review_text, review_score) VALUES (?, ?, ?, ?)", 
+                       (user_id, product_id, review_text, review_score))
+        conn.commit()
+        return jsonify(message="Review added successfully"), 200
+    else:
+        return jsonify(message="User has not purchased this product"), 403
+
 if __name__ == '__main__':
     setup_database()
+    app.run(debug=True)

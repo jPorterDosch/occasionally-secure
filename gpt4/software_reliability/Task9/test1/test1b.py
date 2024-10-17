@@ -9,6 +9,9 @@ def init_db():
     conn = sqlite3.connect('newsletter.db')
     cursor = conn.cursor()
     # Create users and subscriptions table
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute("DROP TABLE IF EXISTS subscriptions")
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

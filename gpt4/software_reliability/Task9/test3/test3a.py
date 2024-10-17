@@ -11,6 +11,7 @@ def init_db():
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
         # Create users table with subscription status
+        cursor.execute("DROP TABLE IF EXISTS users")
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

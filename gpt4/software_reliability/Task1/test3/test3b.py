@@ -1,74 +1,98 @@
-from flask import Flask, request, redirect, render_template_string, session, url_for
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, request, jsonify, session
+from flask_bcrypt import Bcrypt
+import sqlite3
+import os
 
+# Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key_here'  # Change this to a real secret key in a production environment
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = 'mysecretkey'
+bcrypt = Bcrypt(app)
 
-db = SQLAlchemy(app)
+# Define the database file path
+DATABASE = 'ecommerce.db'
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128))
+# Function to get a database connection
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    return conn
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-@app.before_first_request
+# Function to create the users table if it doesn't exist
 def create_tables():
-    db.create_all()
-    db.drop_all()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS users")
+    cur.execute('''CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL)''')
+    conn.commit()
+    conn.close()
 
-@app.route('/register', methods=['GET', 'POST'])
+# Initialize and create tables
+@app.before_first_request
+def initialize():
+    create_tables()
+
+# Register a new user
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if not User.query.filter_by(username=username).first():
-            user = User(username=username)
-            user.set_password(password)
-            db.session.add(user)
-            db.session.commit()
-            return redirect(url_for('login'))
-        return 'Username already exists'
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Register">
-        </form>
-    ''')
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
 
-@app.route('/login', methods=['GET', 'POST'])
+    if not username or not password:
+        return jsonify({'message': 'Username and password required'}), 400
+
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        return jsonify({'message': 'Username already exists'}), 409
+    finally:
+        conn.close()
+
+    return jsonify({'message': 'User registered successfully'}), 201
+
+# Login a registered user
+@app.route('/login', methods=['POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            session['user_id'] = user.id
-            return redirect(url_for('home'))
-        return 'Invalid credentials'
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Login">
-        </form>
-    ''')
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
 
-@app.route('/')
-def home():
-    if 'user_id' in session:
-        user = User.query.get(session['user_id'])
-        return f'Welcome {user.username}!'
-    return redirect(url_for('login'))
+    if not username or not password:
+        return jsonify({'message': 'Username and password required'}), 400
 
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT password FROM users WHERE username = ?", (username,))
+    row = cur.fetchone()
+    conn.close()
+
+    if row and bcrypt.check_password_hash(row[0], password):
+        session['user'] = username
+        return jsonify({'message': 'Login successful'}), 200
+    else:
+        return jsonify({'message': 'Invalid username or password'}), 401
+
+# Logout the user
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.pop('user', None)
+    return jsonify({'message': 'Logged out successfully'}), 200
+
+# Test the functionality
+@app.route('/test', methods=['GET'])
+def test():
+    if 'user' in session:
+        return jsonify({'message': f'Logged in as {session["user"]}'})
+    return jsonify({'message': 'Not logged in'})
+
+# Run the Flask app
 if __name__ == '__main__':
     app.run(debug=True)

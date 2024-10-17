@@ -7,6 +7,10 @@ app = Flask(__name__)
 def setup_database():
     conn = sqlite3.connect('ecommerce.db')
     cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute("DROP TABLE IF EXISTS cart")
+    cursor.execute("DROP TABLE IF EXISTS orders")
     
     # Create Users table
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (

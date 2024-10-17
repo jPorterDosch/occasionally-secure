@@ -1,67 +1,146 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, jsonify, g
+import sqlite3
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+DATABASE = 'ecommerce.db'
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    cart_items = db.relationship('CartItem', backref='user', lazy=True)
+# Database helper functions
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+    return db
 
-class Product(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    price = db.Column(db.Float, nullable=False)
-    stock = db.Column(db.Integer, default=0)
+def query_db(query, args=(), one=False):
+    cur = get_db().execute(query, args)
+    rv = cur.fetchall()
+    cur.close()
+    return (rv[0] if rv else None) if one else rv
 
-class CartItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    product_id = db.Column(db.Integer, nullable=False)
-    quantity = db.Column(db.Integer, default=1)
+def init_db():
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("DROP TABLE IF EXISTS products")
+        cursor.execute("DROP TABLE IF EXISTS users")
+        cursor.execute("DROP TABLE IF EXISTS carts")
 
-@app.before_first_request
-def create_tables():
-    db.create_all()
+        # Create products table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            stock INTEGER NOT NULL
+        )
+        ''')
 
+        # Create users table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )
+        ''')
+
+        # Create carts table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS carts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )
+        ''')
+
+        db.commit()
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+# Route to get product information by product ID
 @app.route('/product/<int:product_id>', methods=['GET'])
 def get_product(product_id):
-    product = Product.query.get(product_id)
+    product = query_db('SELECT * FROM products WHERE id = ?', [product_id], one=True)
     if product:
-        return jsonify({
-            'id': product.id,
-            'name': product.name,
-            'price': product.price,
-            'stock': product.stock
-        })
+        product_info = {
+            'id': product[0],
+            'name': product[1],
+            'price': product[2],
+            'stock': product[3]
+        }
+        return jsonify(product_info), 200
     else:
-        return jsonify({'error': 'Product not found'}), 404
+        return jsonify({"error": "Product not found"}), 404
 
-@app.route('/add-to-cart', methods=['POST'])
+# Route to add product to cart
+@app.route('/cart/add', methods=['POST'])
 def add_to_cart():
-    user_id = request.json.get('user_id')
-    product_id = request.json.get('product_id')
-    quantity = request.json.get('quantity', 1)
+    data = request.get_json()
 
-    user = User.query.get(user_id)
-    product = Product.query.get(product_id)
-    
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    user_id = data.get('user_id')
+    product_id = data.get('product_id')
+    quantity = data.get('quantity')
+
+    # Validate input
+    if not user_id or not product_id or not quantity:
+        return jsonify({"error": "Missing user_id, product_id, or quantity"}), 400
+
+    # Check if product exists and if enough stock is available
+    product = query_db('SELECT * FROM products WHERE id = ?', [product_id], one=True)
     if not product:
-        return jsonify({'error': 'Product not found'}), 404
-    if product.stock < quantity:
-        return jsonify({'error': 'Insufficient stock'}), 400
+        return jsonify({"error": "Product not found"}), 404
 
-    new_cart_item = CartItem(user_id=user_id, product_id=product_id, quantity=quantity)
-    db.session.add(new_cart_item)
-    product.stock -= quantity  # Update stock
-    db.session.commit()
+    if product[3] < quantity:
+        return jsonify({"error": "Not enough stock available"}), 400
 
-    return jsonify({'message': 'Product added to cart successfully'})
+    # Check if user exists
+    user = query_db('SELECT * FROM users WHERE id = ?', [user_id], one=True)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Add product to user's cart
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        INSERT INTO carts (user_id, product_id, quantity)
+        VALUES (?, ?, ?)
+    ''', (user_id, product_id, quantity))
+
+    # Update product stock
+    cursor.execute('''
+        UPDATE products
+        SET stock = stock - ?
+        WHERE id = ?
+    ''', (quantity, product_id))
+
+    db.commit()
+
+    return jsonify({"message": "Product added to cart successfully"}), 200
+
+# Route to initialize the database with sample data
+@app.route('/init', methods=['GET'])
+def initialize_data():
+    db = get_db()
+    cursor = db.cursor()
+
+    # Insert sample products
+    cursor.execute('INSERT INTO products (name, price, stock) VALUES (?, ?, ?)', ('Product A', 100.0, 10))
+    cursor.execute('INSERT INTO products (name, price, stock) VALUES (?, ?, ?)', ('Product B', 150.0, 5))
+
+    # Insert sample users
+    cursor.execute('INSERT INTO users (name) VALUES (?)', ('User 1',))
+    cursor.execute('INSERT INTO users (name) VALUES (?)', ('User 2',))
+
+    db.commit()
+
+    return jsonify({"message": "Database initialized with sample data"}), 200
 
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True)

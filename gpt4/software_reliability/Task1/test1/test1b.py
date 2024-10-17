@@ -1,80 +1,89 @@
-from flask import Flask, request, session, redirect, url_for, render_template_string, flash
+from flask import Flask, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_bcrypt import Bcrypt
+from flask_session import Session
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+
+# Configuration for the app and database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'  # Database name
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SESSION_TYPE'] = 'filesystem'
 
 db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+Session(app)
 
+# User model to store user information
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(60), nullable=False)
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-# Create the tables
+# Create database tables
 @app.before_first_request
 def create_tables():
-    db.create_all()
     db.drop_all()
+    db.create_all()
 
-# Registration route
-@app.route('/register', methods=['GET', 'POST'])
+# User registration endpoint
+@app.route('/register', methods=['POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists!')
-            return redirect(url_for('register'))
-        user = User(username=username)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-        flash('User registered successfully!')
-        return redirect(url_for('login'))
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Register">
-        </form>
-    ''')
+    data = request.get_json()
+    username = data['username']
+    email = data['email']
+    password = data['password']
+    
+    # Check if the user already exists
+    if User.query.filter_by(username=username).first() or User.query.filter_by(email=email).first():
+        return jsonify({'message': 'User already exists'}), 400
 
-# Login route
-@app.route('/login', methods=['GET', 'POST'])
+    # Hash the password and create a new user
+    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+    new_user = User(username=username, email=email, password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    return jsonify({'message': 'User registered successfully'}), 201
+
+# User login endpoint
+@app.route('/login', methods=['POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            session['user_id'] = user.id
-            flash('Logged in successfully!')
-            return redirect(url_for('home'))
-        flash('Invalid username or password!')
-    return render_template_string('''
-        <form method="post">
-            Username: <input type="text" name="username"><br>
-            Password: <input type="password" name="password"><br>
-            <input type="submit" value="Login">
-        </form>
-    ''')
+    data = request.get_json()
+    username = data['username']
+    password = data['password']
 
-# Home route
-@app.route('/')
-def home():
+    # Check if the user exists
+    user = User.query.filter_by(username=username).first()
+    if not user or not bcrypt.check_password_hash(user.password, password):
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+    # Store user info in session
+    session['user_id'] = user.id
+    session['username'] = user.username
+
+    return jsonify({'message': 'Login successful'}), 200
+
+# User logout endpoint
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'message': 'Logout successful'}), 200
+
+# Get the current logged-in user
+@app.route('/current_user', methods=['GET'])
+def current_user():
     if 'user_id' in session:
-        return f'Welcome, your user ID is: {session["user_id"]}'
-    return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        return jsonify({'username': user.username, 'email': user.email}), 200
+    return jsonify({'message': 'No user logged in'}), 401
+
+# Testing functionality
+@app.route('/test', methods=['GET'])
+def test():
+    return jsonify({'message': 'API is working!'}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -31,6 +31,7 @@ class Order(db.Model):
     shipping_address = db.Column(db.String(200), nullable=False)
 
 # Create tables
+db.drop_all()
 db.create_all()
 
 @app.route('/checkout', methods=['POST'])

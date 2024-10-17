@@ -54,4 +54,10 @@ def add_review():
     
     db = get_db_connection()
     db.execute('INSERT INTO reviews (user_id, product_id, text, score) VALUES (?, ?, ?, ?)',
-               (user
+               (user_id, product_id, text, score))
+    db.commit()
+    return jsonify({'success': True}), 201
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True)

@@ -1,66 +1,108 @@
-from flask import Flask, request, jsonify
-from flask_bcrypt import Bcrypt
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
+# Initialize the Flask application
 app = Flask(__name__)
-bcrypt = Bcrypt(app)
+app.secret_key = 'your_secret_key'
 
-DATABASE = 'users.db'
+# Database file
+DATABASE = 'ecommerce.db'
 
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
+# Automatically create user table if it doesn't exist
 def init_db():
-    db = get_db_connection()
-    db.execute("DROP TABLE IF EXISTS users")
-    db.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    ''')
-    db.commit()
-    db.close()
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS users")
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 username TEXT NOT NULL UNIQUE,
+                 email TEXT NOT NULL UNIQUE,
+                 password TEXT NOT NULL)''')
+    conn.commit()
+    conn.close()
 
-@app.route('/register', methods=['POST'])
+# Registration route
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    username = request.json['username']
-    password = request.json['password']
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-    
-    db = get_db_connection()
-    try:
-        db.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_password))
-        db.commit()
-    except sqlite3.IntegrityError:
-        db.close()
-        return jsonify({"error": "Username already exists"}), 409
-    db.close()
-    return jsonify({"message": "User registered successfully"}), 201
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
 
-@app.route('/login', methods=['POST'])
+        # Basic form validation
+        if not username or not email or not password:
+            flash("All fields are required!", "danger")
+            return redirect(url_for('register'))
+
+        hashed_password = generate_password_hash(password)
+
+        try:
+            conn = sqlite3.connect(DATABASE)
+            c = conn.cursor()
+            c.execute("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", 
+                      (username, email, hashed_password))
+            conn.commit()
+            conn.close()
+            flash("Registration successful! You can now log in.", "success")
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash("Username or email already exists.", "danger")
+            return redirect(url_for('register'))
+
+    return render_template('register.html')
+
+# Login route
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    username = request.json['username']
-    password = request.json['password']
-    
-    db = get_db_connection()
-    user = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-    db.close()
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
 
-    if user and bcrypt.check_password_hash(user['password'], password):
-        return jsonify({"message": "Login successful"}), 200
-    else:
-        return jsonify({"error": "Invalid username or password"}), 401
+        conn = sqlite3.connect(DATABASE)
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE email = ?", (email,))
+        user = c.fetchone()
+        conn.close()
 
+        if user and check_password_hash(user[3], password):  # user[3] is the password field
+            session['user_id'] = user[0]
+            session['username'] = user[1]
+            flash("Login successful!", "success")
+            return redirect(url_for('dashboard'))
+        else:
+            flash("Invalid email or password.", "danger")
+            return redirect(url_for('login'))
+
+    return render_template('login.html')
+
+# Dashboard route (for logged-in users)
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' not in session:
+        flash("You need to log in first.", "danger")
+        return redirect(url_for('login'))
+
+    return f"Welcome to your dashboard, {session['username']}!"
+
+# Logout route
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for('login'))
+
+# Initialize the database before the first request
+@app.before_first_request
+def initialize():
+    init_db()
+
+# Simple HTML templates for testing
 @app.route('/')
-def index():
-    return 'Welcome to the e-commerce platform!'
+def home():
+    return redirect(url_for('register'))
 
 if __name__ == '__main__':
-    if not os.path.exists(DATABASE):
-        init_db()
+    # Run the Flask app
     app.run(debug=True)

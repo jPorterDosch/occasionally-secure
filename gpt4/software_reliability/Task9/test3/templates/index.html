@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subscription Management</title>
+</head>
+<body>
+    <h1>Newsletter Subscribers</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul>
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <table border="1">
+        <tr>
+            <th>Email</th>
+            <th>Subscription Status</th>
+            <th>Reason for Unsubscription</th>
+            <th>Action</th>
+        </tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user['email'] }}</td>
+            <td>{{ 'Subscribed' if user['subscribed'] else 'Unsubscribed' }}</td>
+            <td>{{ user['reason'] if user['reason'] else 'N/A' }}</td>
+            <td>
+                {% if user['subscribed'] %}
+                    <a href="/unsubscribe/{{ user['email'] }}">Unsubscribe</a>
+                {% else %}
+                    <span>Unsubscribed</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

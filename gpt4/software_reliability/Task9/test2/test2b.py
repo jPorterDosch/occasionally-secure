@@ -12,6 +12,8 @@ def connect_db():
 def create_tables():
     conn = connect_db()
     cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute("DROP TABLE IF EXISTS newsletter_subscriptions")
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,

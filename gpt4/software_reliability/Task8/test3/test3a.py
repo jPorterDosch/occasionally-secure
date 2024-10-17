@@ -14,6 +14,11 @@ def init_db():
     conn = get_db_connection()
     with conn:
         conn.executescript('''
+        DROP TABLE IF EXISTS users;
+        DROP TABLE IF EXISTS products;
+        DROP TABLE IF EXISTS carts;
+        DROP TABLE IF EXISTS orders;
+                           
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,

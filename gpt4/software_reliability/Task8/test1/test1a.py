@@ -5,6 +5,10 @@ def setup_database():
     conn = sqlite3.connect('ecommerce.db')
     c = conn.cursor()
 
+    c.execute("DROP TABLE IF EXISTS users")
+    c.execute("DROP TABLE IF EXISTS cart_items")
+    c.execute("DROP TABLE IF EXISTS orders")
+    
     # Create Users table
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,

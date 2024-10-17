@@ -17,6 +17,7 @@ class User(db.Model):
 
 # Create database and tables
 with app.app_context():
+    db.drop_all()
     db.create_all()
 
 # HTML form for unsubscribing

@@ -7,6 +7,9 @@ cursor = conn.cursor()
 
 # Automatically create orders and transactions tables
 def create_tables():
+    cursor.execute("DROP TABLE IF EXISTS orders")
+    cursor.execute("DROP TABLE IF EXISTS transactions")
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS orders (
         order_id INTEGER PRIMARY KEY AUTOINCREMENT,

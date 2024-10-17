@@ -7,6 +7,11 @@ cursor = conn.cursor()
 
 # Create necessary tables if they don't exist
 def create_tables():
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute("DROP TABLE IF EXISTS cart")
+    cursor.execute("DROP TABLE IF EXISTS cart")
+    
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
                         user_id INTEGER PRIMARY KEY,
                         name TEXT NOT NULL,
