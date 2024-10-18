@@ -1,67 +1,112 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import UniqueConstraint
+from flask import Flask, request, g, jsonify, render_template_string
+import sqlite3
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    # Additional user fields (e.g., name, email)
+DATABASE = 'ecommerce.db'
 
-class Product(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    # Additional product fields (e.g., name, description)
+# Function to get the database connection
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+    return db
 
-class Purchase(db.Model):
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), primary_key=True)
+# Initialize the database with necessary tables
+def init_db():
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        # Create tables if they don't exist
+        cursor.execute("DROP TABLE IF EXISTS users")
+        cursor.execute("DROP TABLE IF EXISTS products")
+        cursor.execute("DROP TABLE IF EXISTS reviews")
 
-class Review(db.Model):
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), primary_key=True)
-    text = db.Column(db.Text, nullable=False)
-    score = db.Column(db.Integer, nullable=False)
-    __table_args__ = (UniqueConstraint('user_id', 'product_id', name='_user_product_uc'),)
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL
+        )''')
+        
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        )''')
+        
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            review_text TEXT,
+            review_score INTEGER CHECK(review_score >= 1 AND review_score <= 5),
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(product_id) REFERENCES products(id)
+        )''')
 
-    def to_dict(self):
-        return {
-            "user_id": self.user_id,
-            "product_id": self.product_id,
-            "text": self.text,
-            "score": self.score
-        }
+        # Insert test data for users
+        cursor.execute('''
+        INSERT INTO users (username) VALUES
+        ('Alice'),
+        ('Bob'),
+        ('Charlie')
+        ''')
+        
+        # Insert test data for products
+        cursor.execute('''
+        INSERT INTO products (name) VALUES
+        ('Product A'),
+        ('Product B'),
+        ('Product C')
+        ''')
+        db.commit()
 
-@app.before_first_request
-def initialize_database():
-    db.create_all()
+# Clean up database connection after each request
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 
-@app.route('/review', methods=['POST'])
-def add_review():
-    user_id = request.json['user_id']
-    product_id = request.json['product_id']
-    text = request.json['text']
-    score = request.json['score']
+# Route for submitting a review
+@app.route('/submit_review', methods=['POST'])
+def submit_review():
+    user_id = request.form['user_id']
+    product_id = request.form['product_id']
+    review_text = request.form.get('review_text', '')
+    review_score = int(request.form['review_score'])
+    
+    db = get_db()
+    cursor = db.cursor()
+    cursor.execute('''
+        INSERT INTO reviews (user_id, product_id, review_text, review_score)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, product_id, review_text, review_score))
+    db.commit()
+    
+    return jsonify({'message': 'Review submitted successfully'}), 201
 
-    if not (1 <= score <= 5):
-        return jsonify({"error": "Score must be between 1 and 5"}), 400
+# Route for testing the form submission
+@app.route('/test_form')
+def test_form():
+    return render_template_string('''
+        <h2>Submit a Review</h2>
+        <form action="/submit_review" method="post">
+            <label>User ID:</label><br>
+            <input type="number" name="user_id" required><br><br>
+            <label>Product ID:</label><br>
+            <input type="number" name="product_id" required><br><br>
+            <label>Review Text:</label><br>
+            <textarea name="review_text"></textarea><br><br>
+            <label>Review Score (1-5):</label><br>
+            <input type="number" name="review_score" min="1" max="5" required><br><br>
+            <input type="submit" value="Submit Review">
+        </form>
+    ''')
 
-    # Check if the user has purchased the product
-    purchase = Purchase.query.filter_by(user_id=user_id, product_id=product_id).first()
-    if not purchase:
-        return jsonify({"error": "User has not purchased this product"}), 403
-
-    # Check if the review already exists
-    if Review.query.filter_by(user_id=user_id, product_id=product_id).first():
-        return jsonify({"error": "Review already submitted"}), 409
-
-    review = Review(user_id=user_id, product_id=product_id, text=text, score=score)
-    db.session.add(review)
-    db.session.commit()
-
-    return jsonify(review.to_dict()), 201
+# Initialize the database
+init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)

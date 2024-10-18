@@ -1,69 +1,81 @@
 import sqlite3
-from sqlite3 import Error
 
-def create_connection(db_file):
-    """ Create a database connection to the SQLite database specified by db_file """
-    conn = None
-    try:
-        conn = sqlite3.connect(db_file)
-        return conn
-    except Error as e:
-        print(e)
+def setup_database():
+    # Connect to the SQLite database (or create it if it doesn't exist)
+    conn = sqlite3.connect('ecommerce.db')
+    cursor = conn.cursor()
+    
+    # Create a table for products
+    cursor.execute("DROP TABLE IF EXISTS products")
 
-    return conn
-
-def create_table(conn):
-    """ Create a table in the database """
-    try:
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS products (
-                id integer PRIMARY KEY,
-                name text NOT NULL,
-                description text NOT NULL
-            );
-        ''')
-    except Error as e:
-        print(e)
-
-def add_product(conn, product):
-    """ Add a new product to the products table """
-    sql = ''' INSERT INTO products(name, description)
-              VALUES(?,?) '''
-    cur = conn.cursor()
-    cur.execute(sql, product)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL
+        )
+    ''')
+    
+    # Insert sample product data
+    sample_products = [
+        ('Laptop', 'A high-performance laptop suitable for gaming and work'),
+        ('Headphones', 'Noise-cancelling over-ear headphones with rich bass'),
+        ('Keyboard', 'Mechanical keyboard with RGB lighting'),
+        ('Smartphone', 'Latest smartphone with cutting-edge camera features'),
+        ('Gaming Chair', 'Ergonomic gaming chair with adjustable armrests'),
+        ('Monitor', '4K Ultra HD monitor with wide viewing angles'),
+        ('Mouse', 'Wireless mouse with ergonomic design and high DPI settings'),
+        ('Tablet', '10-inch tablet with a high-resolution display and stylus support'),
+        ('Printer', 'Wireless printer with fast printing speed and duplex printing'),
+        ('Webcam', 'HD webcam with a built-in microphone for video calls')
+    ]
+    
+    cursor.executemany('INSERT INTO products (name, description) VALUES (?, ?)', sample_products)
     conn.commit()
-    return cur.lastrowid
+    print("Database setup complete with sample data.")
+    conn.close()
 
-def search_products(conn, query):
-    """ Search for products by name or description """
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM products WHERE name LIKE ? OR description LIKE ?", ('%' + query + '%', '%' + query + '%',))
-    rows = cur.fetchall()
+def search_products(query, limit=5):
+    # Connect to the database
+    conn = sqlite3.connect('ecommerce.db')
+    cursor = conn.cursor()
+    
+    # Perform a full-text search on the name and description fields
+    cursor.execute('''
+        SELECT id, name, description 
+        FROM products 
+        WHERE name LIKE ? OR description LIKE ? 
+        ORDER BY 
+            CASE 
+                WHEN name LIKE ? THEN 1 
+                WHEN description LIKE ? THEN 2 
+                ELSE 3 
+            END, 
+            name
+        LIMIT ?
+    ''', (f'%{query}%', f'%{query}%', f'%{query}%', f'%{query}%', limit))
+    
+    # Fetch the results
+    results = cursor.fetchall()
+    conn.close()
+    return results
 
-    for row in rows:
-        print(row)
+def test_search():
+    # Set up the database and insert sample data
+    setup_database()
 
-def main():
-    database = "ecommerce.db"
-
-    # Create a database connection
-    conn = create_connection(database)
-
-    with conn:
-        # Create products table
-        create_table(conn)
-
-        # Add products
-        # Note: You can comment out these lines after the first run to avoid inserting duplicates
-        add_product(conn, ('Red Shirt', 'Comfortable cotton t-shirt'))
-        add_product(conn, ('Blue Jeans', 'Stylish denim for all seasons'))
-        add_product(conn, ('Running Shoes', 'High performance athletic shoes'))
-
-        # Search for products
-        print("Search Results:")
-        search_query = input("Enter search query: ")
-        search_products(conn, search_query)
+    # Test search queries
+    test_queries = ['laptop', 'gaming', 'wireless', 'RGB']
+    for query in test_queries:
+        print(f"Search results for '{query}':")
+        results = search_products(query)
+        if results:
+            for row in results:
+                print(f"- {row[1]}: {row[2]}")
+        else:
+            print("No results found.")
+        print('-' * 40)
 
 if __name__ == '__main__':
-    main()
+    # Run the test function
+    test_search()

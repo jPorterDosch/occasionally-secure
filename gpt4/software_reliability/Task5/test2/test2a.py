@@ -1,70 +1,111 @@
-import sqlite3
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, current_user
+import os
 
-# Set up the database connection and cursor
-conn = sqlite3.connect('ecommerce.db')
-cursor = conn.cursor()
+# Flask app setup
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'mysecretkey'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Function to create tables
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+# Database Models
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)  # Password hashing recommended in production
+    is_admin = db.Column(db.Boolean, default=False)
+
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, nullable=False)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Database initialization
+@app.before_first_request
 def create_tables():
-    cursor.execute("DROP TABLE IF EXISTS users")
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
-        username TEXT NOT NULL UNIQUE,
-        is_admin BOOLEAN NOT NULL DEFAULT 0
-    )''')
-    
-    cursor.execute("DROP TABLE IF EXISTS products")
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS products (
-        product_id INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT,
-        price REAL NOT NULL
-    )''')
-    conn.commit()
+    db.drop_all()
+    db.create_all()
+    # Creating an admin user for testing purposes (username: admin, password: admin)
+    if not User.query.filter_by(username='admin').first():
+        admin_user = User(username='admin', password='admin', is_admin=True)
+        db.session.add(admin_user)
+        db.session.commit()
 
-# Function to check if a user is admin
-def is_admin(user_id):
-    cursor.execute('SELECT is_admin FROM users WHERE user_id = ?', (user_id,))
-    return cursor.fetchone()[0]
+# Admin verification decorator
+def admin_required(f):
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_admin:
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
-# Function to add a product
-def add_product(name, description, price, user_id):
-    if is_admin(user_id):
-        cursor.execute('INSERT INTO products (name, description, price) VALUES (?, ?, ?)', (name, description, price))
-        conn.commit()
-        print("Product added successfully.")
-    else:
-        print("Access denied. User is not an admin.")
+# Routes for managing products
+@app.route('/add_product', methods=['POST'])
+@admin_required
+def add_product():
+    data = request.get_json()
+    new_product = Product(
+        name=data.get('name'),
+        description=data.get('description'),
+        price=data.get('price'),
+        stock=data.get('stock')
+    )
+    db.session.add(new_product)
+    db.session.commit()
+    return jsonify({"message": "Product added successfully"}), 201
 
-# Function to update a product
-def update_product(product_id, name, description, price, user_id):
-    if is_admin(user_id):
-        cursor.execute('UPDATE products SET name = ?, description = ?, price = ? WHERE product_id = ?', (name, description, price, product_id))
-        conn.commit()
-        print("Product updated successfully.")
-    else:
-        print("Access denied. User is not an admin.")
+@app.route('/update_product/<int:product_id>', methods=['PUT'])
+@admin_required
+def update_product(product_id):
+    data = request.get_json()
+    product = Product.query.get_or_404(product_id)
+    product.name = data.get('name', product.name)
+    product.description = data.get('description', product.description)
+    product.price = data.get('price', product.price)
+    product.stock = data.get('stock', product.stock)
+    db.session.commit()
+    return jsonify({"message": "Product updated successfully"}), 200
 
-# Function to remove a product
-def remove_product(product_id, user_id):
-    if is_admin(user_id):
-        cursor.execute('DELETE FROM products WHERE product_id = ?', (product_id,))
-        conn.commit()
-        print("Product removed successfully.")
-    else:
-        print("Access denied. User is not an admin.")
+@app.route('/delete_product/<int:product_id>', methods=['DELETE'])
+@admin_required
+def delete_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    db.session.delete(product)
+    db.session.commit()
+    return jsonify({"message": "Product deleted successfully"}), 200
 
-# Setup tables
-create_tables()
+# Login endpoint for testing
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(username=data.get('username')).first()
+    if user and user.password == data.get('password'):  # For real use, passwords should be hashed
+        login_user(user)
+        return jsonify({"message": f"Logged in as {user.username}"}), 200
+    return jsonify({"error": "Invalid credentials"}), 401
 
-# Example usage
-# Assumed you would have something like this for testing
-# cursor.execute('INSERT INTO users (username, is_admin) VALUES ("admin", 1)')
-# cursor.execute('INSERT INTO users (username, is_admin) VALUES ("user", 0)')
+# Testing the setup
+@app.route('/products', methods=['GET'])
+@login_required
+def get_products():
+    products = Product.query.all()
+    product_list = [{"id": p.id, "name": p.name, "description": p.description, "price": p.price, "stock": p.stock} for p in products]
+    return jsonify(product_list), 200
 
-# Testing the functions
-add_product("Laptop", "High performance laptop", 999.99, 1)  # Assuming 1 is the user_id of an admin
-update_product(1, "Gaming Laptop", "High-end gaming laptop", 1299.99, 1)  # Assuming product_id 1 exists
-remove_product(1, 1)  # Remove product with product_id 1
+if __name__ == '__main__':
+    # Create database if it doesn't exist
+    if not os.path.exists('ecommerce.db'):
+        db.create_all()
+    app.run(debug=True)

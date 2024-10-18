@@ -1,70 +1,70 @@
+from flask import Flask, request, jsonify
 import sqlite3
 
-def create_connection(db_file):
-    """ Create a database connection to the SQLite database specified by db_file """
-    conn = None
-    try:
-        conn = sqlite3.connect(db_file)
-        return conn
-    except sqlite3.Error as e:
-        print(e)
+app = Flask(__name__)
+DATABASE = 'ecommerce.db'
+
+def init_db():
+    """Initialize the database and create the products table."""
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+
+    # Enable FTS5 for full-text search
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute('''
+    CREATE VIRTUAL TABLE IF NOT EXISTS products USING fts5(
+        name, 
+        description
+    )
+    ''')
+
+    # Insert sample data
+    cursor.executemany('''
+    INSERT INTO products (name, description) VALUES (?, ?)
+    ''', [
+        ('Laptop', 'High performance laptop for gaming and work'),
+        ('Gaming Mouse', 'Ergonomic mouse with high DPI for precision'),
+        ('Headphones', 'Noise-cancelling over-ear headphones with great sound quality'),
+        ('Keyboard', 'Mechanical keyboard with RGB backlighting'),
+        ('Smartphone', 'Latest model smartphone with high-resolution display'),
+    ])
+
+    conn.commit()
+    conn.close()
+
+def get_db_connection():
+    """Establish a connection to the SQLite database."""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
     return conn
 
-def create_table(conn):
-    """ Create a table for products """
-    create_table_sql = '''
-    CREATE TABLE IF NOT EXISTS products (
-        id integer PRIMARY KEY,
-        name text NOT NULL,
-        description text NOT NULL
-    );
-    '''
-    try:
-        c = conn.cursor()
-        c.execute(create_table_sql)
-    except sqlite3.Error as e:
-        print(e)
+@app.route('/search', methods=['GET'])
+def search():
+    """Search for products based on query string."""
+    query = request.args.get('q')
+    if not query:
+        return jsonify({'error': 'Query parameter is required'}), 400
 
-def insert_product(conn, product):
-    """ Insert a new product into the products table """
-    sql = ''' INSERT INTO products(name, description)
-              VALUES(?,?) '''
-    cur = conn.cursor()
-    cur.execute(sql, product)
-    conn.commit()
-    return cur.lastrowid
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-def search_products(conn, query):
-    """ Search for products by name or description """
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM products WHERE name LIKE ? OR description LIKE ?", ('%'+query+'%', '%'+query+'%'))
-    rows = cur.fetchall()
-    return rows
+    # Search the FTS table using MATCH for full-text search
+    cursor.execute('''
+    SELECT name, description, rank FROM (
+        SELECT name, description, rank(matchinfo(products)) as rank
+        FROM products
+        WHERE products MATCH ?
+        ORDER BY rank DESC
+    ) LIMIT 10
+    ''', (query,))
 
-def main():
-    database = "ecommerce.db"
+    results = cursor.fetchall()
+    conn.close()
 
-    # Create a database connection
-    conn = create_connection(database)
-
-    if conn is not None:
-        # Create products table
-        create_table(conn)
-
-        # Insert sample products
-        insert_product(conn, ('MacBook Pro 16', 'Apple MacBook Pro 16 inch with M1 Max chip'))
-        insert_product(conn, ('Surface Laptop 4', 'Microsoft Surface Laptop 4 15 inch with AMD processor'))
-        insert_product(conn, ('Dell XPS 15', 'Dell XPS 15 with Intel Core i7 11th Gen'))
-
-        # Search for products
-        search_query = input("Enter a search term: ")
-        products = search_products(conn, search_query)
-        for product in products:
-            print(product)
-
-        conn.close()
-    else:
-        print("Error! cannot create the database connection.")
+    # Convert results to a list of dictionaries
+    products = [{'name': row['name'], 'description': row['description']} for row in results]
+    return jsonify(products)
 
 if __name__ == '__main__':
-    main()
+    init_db()  # Initialize the database and tables
+    app.run(debug=True)

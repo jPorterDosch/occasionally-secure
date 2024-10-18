@@ -1,80 +1,72 @@
 import sqlite3
-from sqlite3 import Error
 
-# Function to create a connection to an SQLite database
-def create_connection(db_file):
-    """ Create a database connection to a SQLite database """
-    conn = None
-    try:
-        conn = sqlite3.connect(db_file)
-        return conn
-    except Error as e:
-        print(e)
-    return conn
+# Function to set up the database and create the products table
+def setup_database():
+    conn = sqlite3.connect('ecommerce.db')
+    cursor = conn.cursor()
 
-# Function to create the products table
-def create_table(conn):
-    try:
-        sql_create_products_table = """ CREATE TABLE IF NOT EXISTS products (
-                                            id integer PRIMARY KEY,
-                                            name text NOT NULL,
-                                            description text NOT NULL
-                                        ); """
-        cursor = conn.cursor()
-        cursor.execute(sql_create_products_table)
-    except Error as e:
-        print(e)
+    # Create a products table with sample data
+    cursor.execute("DROP TABLE IF EXISTS products")
+    
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL
+    )
+    ''')
 
-# Function to insert a new product into the products table
-def create_product(conn, product):
-    sql = ''' INSERT INTO products(name, description)
-              VALUES(?,?) '''
-    cur = conn.cursor()
-    cur.execute(sql, product)
+    # Sample products
+    products = [
+        ('Laptop', 'A high-performance laptop with 16GB RAM and 512GB SSD.'),
+        ('Headphones', 'Wireless noise-canceling headphones with long battery life.'),
+        ('Smartphone', 'Latest model smartphone with an amazing camera and fast processor.'),
+        ('Tablet', 'Lightweight tablet with a sharp display and long-lasting battery.'),
+        ('Monitor', '24-inch monitor with Full HD resolution and thin bezels.'),
+        ('Keyboard', 'Mechanical keyboard with RGB lighting and comfortable keys.'),
+        ('Mouse', 'Ergonomic wireless mouse with adjustable DPI settings.'),
+        ('Speaker', 'Portable Bluetooth speaker with deep bass and clear sound.'),
+        ('Camera', 'Digital camera with 20MP sensor and optical zoom lens.'),
+        ('Charger', 'Fast charging USB-C charger compatible with various devices.')
+    ]
+
+    # Insert sample data into the products table
+    cursor.executemany('INSERT INTO products (name, description) VALUES (?, ?)', products)
     conn.commit()
-    return cur.lastrowid
+    conn.close()
 
-# Function to search products by name or description
-def search_products(conn, query):
-    sql = ''' SELECT name, description,
-              (LENGTH(name) - LENGTH(REPLACE(LOWER(name), LOWER(?), ''))) / LENGTH(?) AS name_relevance,
-              (LENGTH(description) - LENGTH(REPLACE(LOWER(description), LOWER(?), ''))) / LENGTH(?) AS desc_relevance
-              FROM products
-              ORDER BY (name_relevance + desc_relevance) DESC
-           '''
-    cur = conn.cursor()
-    cur.execute(sql, (query, query, query, query))
-    rows = cur.fetchall()
-    return rows
+# Function to search for products by name or description
+def search_products(query):
+    conn = sqlite3.connect('ecommerce.db')
+    cursor = conn.cursor()
 
-# Main function to demonstrate functionality
-def main():
-    database = "pythonsqlite.db"
+    # Use full-text search with the LIKE operator to find matching products
+    cursor.execute('''
+    SELECT id, name, description
+    FROM products
+    WHERE name LIKE ? OR description LIKE ?
+    ''', (f'%{query}%', f'%{query}%'))
 
-    # Create a database connection
-    conn = create_connection(database)
-    if conn is not None:
-        # Create products table
-        create_table(conn)
+    # Fetch all matching results
+    results = cursor.fetchall()
+    conn.close()
+    return results
 
-        # Insert products
-        product1 = ('iPhone 12', 'New Apple iPhone 12 (64GB) - Blue')
-        product2 = ('Samsung Galaxy S21', 'Experience the new Samsung Galaxy S21 Ultra with 128GB storage')
-        product3 = ('iPhone Charger', 'Fast charging USB-C cable for iPhone')
-        create_product(conn, product1)
-        create_product(conn, product2)
-        create_product(conn, product3)
+# Function to test the search functionality
+def test_search():
+    setup_database()
+    while True:
+        query = input("Enter a search term (or 'exit' to quit): ")
+        if query.lower() == 'exit':
+            break
+        results = search_products(query)
+        if results:
+            print("Search Results:")
+            for product in results:
+                print(f"ID: {product[0]}, Name: {product[1]}, Description: {product[2]}")
+        else:
+            print("No products found matching your search.")
 
-        # Search for a product
-        search_query = "iphone"
-        results = search_products(conn, search_query)
-        print("Search results:")
-        for result in results:
-            print(result)
-
-        conn.close()
-    else:
-        print("Error! cannot create the database connection.")
-
+# Run the test
 if __name__ == '__main__':
-    main()
+    test_search()

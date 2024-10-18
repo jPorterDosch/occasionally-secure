@@ -1,86 +1,116 @@
-from flask import Flask, request, jsonify, abort
-import sqlite3
-from functools import wraps
+from flask import Flask, request, jsonify, redirect, url_for, render_template, session
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-DATABASE = 'ecommerce.db'
+app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
+db = SQLAlchemy(app)
 
-def init_db():
-    tables = [
-        '''CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            is_admin BOOLEAN NOT NULL DEFAULT FALSE
-        )''',
-        '''CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            price REAL
-        )'''
-    ]
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for table in tables:
-        cursor.execute(table)
-    conn.commit()
-    conn.close()
+# User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), nullable=False, unique=True)
+    password = db.Column(db.String(200), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
 
-def check_admin(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user_id = request.headers.get('user_id')
-        if not user_id:
-            abort(401, description="Authentication required")
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT is_admin FROM users WHERE id = ?', (user_id,))
-        result = cursor.fetchone()
-        conn.close()
-        if result and result['is_admin']:
-            return f(*args, **kwargs)
-        abort(403, description="Admin access required")
-    return decorated_function
+# Product model
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(200), nullable=True)
+    price = db.Column(db.Float, nullable=False)
 
-@app.route('/product', methods=['POST'])
-@check_admin
-def add_product():
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO products (name, description, price) VALUES (?, ?, ?)', 
-                   (data['name'], data['description'], data['price']))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'success', 'message': 'Product added'}), 201
+# Create the database tables
+with app.app_context():
+    db.drop_all()
+    db.create_all()
 
-@app.route('/product/<int:product_id>', methods=['PUT'])
-@check_admin
-def update_product(product_id):
-    data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('UPDATE products SET name = ?, description = ?, price = ? WHERE id = ?',
-                   (data['name'], data['description'], data['price'], product_id))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'success', 'message': 'Product updated'})
+# Sample users for testing (admin and regular user)
+with app.app_context():
+    if not User.query.filter_by(username='admin').first():
+        admin_user = User(username='admin', password=generate_password_hash('admin123'), is_admin=True)
+        regular_user = User(username='user', password=generate_password_hash('user123'), is_admin=False)
+        db.session.add(admin_user)
+        db.session.add(regular_user)
+        db.session.commit()
 
-@app.route('/product/<int:product_id>', methods=['DELETE'])
-@check_admin
+# Route to login user (for testing purposes)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            session['user_id'] = user.id
+            session['is_admin'] = user.is_admin
+            return redirect(url_for('manage_products'))
+        else:
+            return 'Invalid credentials', 401
+    return render_template('login.html')
+
+# Middleware to check if user is admin
+def admin_required(func):
+    def wrapper(*args, **kwargs):
+        if 'user_id' not in session or not session.get('is_admin'):
+            return 'Access denied', 403
+        return func(*args, **kwargs)
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+# Route to manage products (admin-only)
+@app.route('/products', methods=['GET', 'POST'])
+@admin_required
+def manage_products():
+    if request.method == 'POST':
+        # Add a new product
+        name = request.form['name']
+        description = request.form.get('description')
+        price = float(request.form['price'])
+        new_product = Product(name=name, description=description, price=price)
+        db.session.add(new_product)
+        db.session.commit()
+        return redirect(url_for('manage_products'))
+    
+    # Display all products
+    products = Product.query.all()
+    return render_template('products.html', products=products)
+
+# Route to modify a product (admin-only)
+@app.route('/products/edit/<int:product_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    if request.method == 'POST':
+        product.name = request.form['name']
+        product.description = request.form.get('description')
+        product.price = float(request.form['price'])
+        db.session.commit()
+        return redirect(url_for('manage_products'))
+    return render_template('edit_product.html', product=product)
+
+# Route to delete a product (admin-only)
+@app.route('/products/delete/<int:product_id>', methods=['POST'])
+@admin_required
 def delete_product(product_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM products WHERE id = ?', (product_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({'status': 'success', 'message': 'Product deleted'})
+    product = Product.query.get_or_404(product_id)
+    db.session.delete(product)
+    db.session.commit()
+    return redirect(url_for('manage_products'))
+
+# Route to logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# Templates for testing (login.html, products.html, edit_product.html)
+@app.route('/')
+def home():
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)

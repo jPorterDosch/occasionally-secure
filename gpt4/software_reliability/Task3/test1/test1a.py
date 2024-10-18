@@ -1,50 +1,110 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, jsonify, session
+import sqlite3
+from werkzeug.security import generate_password_hash
 import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+app.secret_key = os.urandom(24)  # Secret key for session management
 
-# Database model for User and PaymentCard
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+# Database setup
+def init_db():
+    conn = sqlite3.connect('ecommerce.db')
+    c = conn.cursor()
+    # Create users table
+    c.execute("DROP TABLE IF EXISTS users")
+    c.execute("DROP TABLE IF EXISTS payment_cards")
+    
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL
+        )
+    ''')
+    # Create payment cards table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS payment_cards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            card_number TEXT NOT NULL,
+            card_holder TEXT NOT NULL,
+            expiry_date TEXT NOT NULL,
+            cvv TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-class PaymentCard(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    card_number = db.Column(db.String(20), unique=True, nullable=False)
-    expiration_date = db.Column(db.String(5), nullable=False)
-    cvv = db.Column(db.String(3), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    user = db.relationship('User', backref=db.backref('cards', lazy=True))
+# Initialize the database
+init_db()
 
-# Create the database and tables
-@app.before_first_request
-def create_tables():
-    db.create_all()
-    db.drop_all()
+# Utility function to get database connection
+def get_db_connection():
+    conn = sqlite3.connect('ecommerce.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Route to add a payment card
+# Route for user login simulation
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    conn = get_db_connection()
+    user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    conn.close()
+
+    if user and generate_password_hash(password) == user['password']:
+        session['user_id'] = user['id']
+        return jsonify({'message': 'Login successful'}), 200
+    else:
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+# Route for adding a payment card
 @app.route('/add_card', methods=['POST'])
 def add_card():
-    user_id = request.json['user_id']
-    card_number = request.json['card_number']
-    expiration_date = request.json['expiration_date']
-    cvv = request.json['cvv']
+    if 'user_id' not in session:
+        return jsonify({'message': 'User not logged in'}), 401
 
-    # Validate that the user exists
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": "User not found"}), 404
+    user_id = session['user_id']
+    card_number = request.json.get('card_number')
+    card_holder = request.json.get('card_holder')
+    expiry_date = request.json.get('expiry_date')
+    cvv = request.json.get('cvv')
 
-    # Create and save the new card
-    new_card = PaymentCard(card_number=card_number, expiration_date=expiration_date, cvv=cvv, user_id=user_id)
-    db.session.add(new_card)
-    db.session.commit()
-    return jsonify({"message": "Card added successfully"}), 201
+    if not (card_number and card_holder and expiry_date and cvv):
+        return jsonify({'message': 'All fields are required'}), 400
+
+    # Save payment card information
+    conn = get_db_connection()
+    conn.execute(
+        'INSERT INTO payment_cards (user_id, card_number, card_holder, expiry_date, cvv) VALUES (?, ?, ?, ?, ?)',
+        (user_id, card_number, card_holder, expiry_date, cvv)
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({'message': 'Card added successfully'}), 201
+
+# Route to simulate user registration for testing
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.json.get('username')
+    password = request.json.get('password')
+
+    if not (username and password):
+        return jsonify({'message': 'Username and password are required'}), 400
+
+    hashed_password = generate_password_hash(password)
+    conn = get_db_connection()
+    conn.execute(
+        'INSERT INTO users (username, password) VALUES (?, ?)',
+        (username, hashed_password)
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({'message': 'User registered successfully'}), 201
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=True)

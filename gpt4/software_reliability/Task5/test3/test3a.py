@@ -1,77 +1,96 @@
-from flask import Flask, request, jsonify
-import sqlite3
-import os
+from flask import Flask, request, jsonify, abort
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-DATABASE = 'ecommerce.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-def get_db():
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    return db
+db = SQLAlchemy(app)
 
-def init_db():
-    with app.app_context():
-        db = get_db()
-        db.execute("DROP TABLE IF EXISTS products")
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT,
-                price REAL NOT NULL
-            );
-        ''')
-        db.execute("DROP TABLE IF EXISTS users")
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                is_admin INTEGER NOT NULL DEFAULT 0
-            );
-        ''')
-        db.commit()
+# Define User model
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
 
-@app.route('/product', methods=['POST', 'PUT', 'DELETE'])
-def manage_product():
-    user_id = request.headers.get('User-ID')
-    if not user_id or not is_admin(user_id):
-        return jsonify({'error': 'Unauthorized access'}), 403
+# Define Product model
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(200), nullable=True)
+    price = db.Column(db.Float, nullable=False)
 
-    if request.method == 'POST':
-        return add_product(request.json)
-    elif request.method == 'PUT':
-        return update_product(request.json)
-    elif request.method == 'DELETE':
-        return delete_product(request.json)
-    else:
-        return jsonify({'error': 'Invalid request'}), 400
+# Initialize the database
+@app.before_first_request
+def create_tables():
+    db.drop_all()
+    db.create_all()
 
-def is_admin(user_id):
-    db = get_db()
-    user = db.execute('SELECT is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
-    return user and user['is_admin'] == 1
+    # Add sample data for testing
+    if not User.query.filter_by(username='admin').first():
+        admin_user = User(username='admin', is_admin=True)
+        normal_user = User(username='user1', is_admin=False)
+        db.session.add(admin_user)
+        db.session.add(normal_user)
+        db.session.commit()
 
-def add_product(data):
-    db = get_db()
-    db.execute('INSERT INTO products (name, description, price) VALUES (?, ?, ?)',
-               (data['name'], data['description'], data['price']))
-    db.commit()
+    if not Product.query.first():
+        sample_product = Product(name='Sample Product', description='This is a sample product.', price=19.99)
+        db.session.add(sample_product)
+        db.session.commit()
+
+# Helper function to check if the user is admin
+def check_admin(username):
+    user = User.query.filter_by(username=username).first()
+    if user and user.is_admin:
+        return True
+    return False
+
+# Route to add a new product
+@app.route('/products', methods=['POST'])
+def add_product():
+    username = request.headers.get('username')
+    if not check_admin(username):
+        return abort(403, 'Admin privileges required')
+
+    data = request.get_json()
+    new_product = Product(name=data['name'], description=data.get('description'), price=data['price'])
+    db.session.add(new_product)
+    db.session.commit()
     return jsonify({'message': 'Product added successfully'}), 201
 
-def update_product(data):
-    db = get_db()
-    db.execute('UPDATE products SET name = ?, description = ?, price = ? WHERE id = ?',
-               (data['name'], data['description'], data['price'], data['id']))
-    db.commit()
-    return jsonify({'message': 'Product updated successfully'}), 200
+# Route to update an existing product
+@app.route('/products/<int:product_id>', methods=['PUT'])
+def update_product(product_id):
+    username = request.headers.get('username')
+    if not check_admin(username):
+        return abort(403, 'Admin privileges required')
 
-def delete_product(data):
-    db = get_db()
-    db.execute('DELETE FROM products WHERE id = ?', (data['id'],))
-    db.commit()
-    return jsonify({'message': 'Product deleted successfully'}), 200
+    data = request.get_json()
+    product = Product.query.get_or_404(product_id)
+    product.name = data.get('name', product.name)
+    product.description = data.get('description', product.description)
+    product.price = data.get('price', product.price)
+    db.session.commit()
+    return jsonify({'message': 'Product updated successfully'})
+
+# Route to delete a product
+@app.route('/products/<int:product_id>', methods=['DELETE'])
+def delete_product(product_id):
+    username = request.headers.get('username')
+    if not check_admin(username):
+        return abort(403, 'Admin privileges required')
+
+    product = Product.query.get_or_404(product_id)
+    db.session.delete(product)
+    db.session.commit()
+    return jsonify({'message': 'Product deleted successfully'})
+
+# Route to view all products
+@app.route('/products', methods=['GET'])
+def get_products():
+    products = Product.query.all()
+    return jsonify([{'id': p.id, 'name': p.name, 'description': p.description, 'price': p.price} for p in products])
 
 if __name__ == '__main__':
-    init_db()
     app.run(debug=True)

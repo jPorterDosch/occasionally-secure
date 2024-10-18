@@ -1,60 +1,61 @@
 import sqlite3
 
-def setup_database():
-    # Connect to SQLite database in memory (for testing purposes)
-    conn = sqlite3.connect(':memory:')
-    
-    # Create a new table 'products'
-    conn.execute('''
-        CREATE TABLE products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT NOT NULL,
-            price DECIMAL(10, 2) NOT NULL
-        );
-    ''')
-    
-    # Sample data
-    products = [
-        ('Laptop', 'A high-performance laptop suitable for gaming and professional use.', 999.99),
-        ('Coffee Maker', 'Brews coffee in under 5 minutes with automatic settings.', 79.99),
-        ('Headphones', 'Noise cancelling headphones, comfortable over-ear design.', 199.99),
-        ('Smartwatch', 'Track your fitness and receive notifications on the go.', 299.99),
-        ('Backpack', 'Waterproof backpack ideal for traveling and everyday use.', 59.99)
-    ]
-    
-    # Inserting data into the products table
-    conn.executemany('INSERT INTO products (name, description, price) VALUES (?, ?, ?);', products)
-    conn.commit()
-    return conn
-
-def search_products(conn, query):
-    # Search for products where the name or description matches the query using pattern matching
+def initialize_database(db_name="ecommerce.db"):
+    """Initialize the database and create the products table with some sample data."""
+    conn = sqlite3.connect(db_name)
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM products
-        WHERE name LIKE ? OR description LIKE ?
-        ORDER BY CASE 
-            WHEN name LIKE ? THEN 1
-            WHEN description LIKE ? THEN 2
-            ELSE 3
-        END;
-    ''', (f'%{query}%', f'%{query}%', f'{query}%', f'{query}%'))
-    
-    # Fetch and return the results
-    return cursor.fetchall()
 
-def main():
-    # Setup the database and create tables
-    conn = setup_database()
+    # Enable Full-Text Search in SQLite (using FTS5)
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute("CREATE VIRTUAL TABLE products USING fts5(id, name, description)")
+
+    # Sample data for products
+    sample_data = [
+        (1, "Laptop", "A high-performance laptop for gaming and work."),
+        (2, "Smartphone", "A smartphone with a great camera and long battery life."),
+        (3, "Headphones", "Noise-cancelling headphones for immersive sound."),
+        (4, "Keyboard", "Mechanical keyboard with RGB lighting."),
+        (5, "Monitor", "4K monitor for sharp visuals and vibrant colors."),
+        (6, "Mouse", "Ergonomic mouse with customizable buttons."),
+        (7, "Webcam", "HD webcam for video conferencing and streaming."),
+        (8, "Speaker", "Portable Bluetooth speaker with powerful sound."),
+        (9, "Tablet", "A tablet for reading, browsing, and light gaming."),
+        (10, "Charger", "Fast-charging USB-C charger for phones and laptops.")
+    ]
+
+    # Insert sample data into the products table
+    cursor.executemany("INSERT INTO products (id, name, description) VALUES (?, ?, ?)", sample_data)
+    conn.commit()
+    conn.close()
+
+def search_products(query, db_name="ecommerce.db", limit=5):
+    """Search for products in the database by name or description."""
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+
+    # Perform Full-Text Search
+    cursor.execute("SELECT id, name, description FROM products WHERE products MATCH ? ORDER BY rank LIMIT ?", (query, limit))
+    results = cursor.fetchall()
+
+    conn.close()
+    return results
+
+def test_search():
+    """Test the search functionality with sample queries."""
+    initialize_database()  # Initialize the database with sample data
     
     # Example search queries
-    search_query = input("Enter a search query: ")
-    results = search_products(conn, search_query)
+    queries = ["laptop", "gaming", "RGB", "sound", "charger", "phone", "camera"]
     
-    # Display search results
-    for result in results:
-        print(f"ID: {result[0]}, Name: {result[1]}, Description: {result[2]}, Price: {result[3]}")
+    for query in queries:
+        print(f"Search results for '{query}':")
+        results = search_products(query)
+        if results:
+            for product in results:
+                print(f"ID: {product[0]}, Name: {product[1]}, Description: {product[2]}")
+        else:
+            print("No results found.")
+        print("-" * 40)
 
 if __name__ == "__main__":
-    main()
+    test_search()

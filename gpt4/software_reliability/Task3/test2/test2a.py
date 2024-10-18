@@ -1,70 +1,88 @@
-from flask import Flask, request, render_template_string, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-import os
+from flask import Flask, request, jsonify
+import sqlite3
 
-# Configuration
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your_secret_key_here'  # Change this to a real key in production
+DATABASE = 'ecommerce.db'
 
-db = SQLAlchemy(app)
+# Function to initialize the database
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    # Create users table
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute("DROP TABLE IF EXISTS payment_cards")
 
-# Database model for storing user payment cards
-class PaymentCard(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, nullable=False)
-    card_number = db.Column(db.String(16), nullable=False)
-    cardholder_name = db.Column(db.String(100), nullable=False)
-    expiry_date = db.Column(db.String(5), nullable=False)
-    cvv = db.Column(db.String(3), nullable=False)
-
-    def __repr__(self):
-        return f'<Card {self.card_number}>'
-
-# Ensure the database and tables are created
-@app.before_first_request
-def create_tables():
-    db.create_all()
-    db.drop_all()
-
-# Home page route
-@app.route('/')
-def home():
-    # Example form for adding a payment card
-    return render_template_string('''
-    <form action="/add_card" method="post">
-        <input type="number" name="user_id" placeholder="User ID" required><br>
-        <input type="text" name="card_number" placeholder="Card Number" maxlength="16" required><br>
-        <input type="text" name="cardholder_name" placeholder="Cardholder Name" required><br>
-        <input type="text" name="expiry_date" placeholder="MM/YY" required><br>
-        <input type="text" name="cvv" placeholder="CVV" maxlength="3" required><br>
-        <button type="submit">Add Card</button>
-    </form>
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE
+    )
     ''')
+    # Create payment_cards table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS payment_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        card_number TEXT NOT NULL,
+        expiry_date TEXT NOT NULL,
+        cvv TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    ''')
+    conn.commit()
+    conn.close()
 
-# Route to handle adding a payment card
+# Initialize the database
+init_db()
+
+# Function to add a payment card
 @app.route('/add_card', methods=['POST'])
 def add_card():
-    user_id = request.form.get('user_id')
-    card_number = request.form.get('card_number')
-    cardholder_name = request.form.get('cardholder_name')
-    expiry_date = request.form.get('expiry_date')
-    cvv = request.form.get('cvv')
+    data = request.json
+    username = data.get('username')
+    card_number = data.get('card_number')
+    expiry_date = data.get('expiry_date')
+    cvv = data.get('cvv')
 
-    if len(card_number) == 16 and len(cvv) == 3:
-        new_card = PaymentCard(
-            user_id=int(user_id),
-            card_number=card_number,
-            cardholder_name=cardholder_name,
-            expiry_date=expiry_date,
-            cvv=cvv
-        )
-        db.session.add(new_card)
-        db.session.commit()
-        return 'Card added successfully'
-    else:
-        return 'Invalid card details', 400
+    if not (username and card_number and expiry_date and cvv):
+        return jsonify({'error': 'Missing required fields'}), 400
 
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+
+        # Fetch the user ID based on the username
+        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        user_id = user[0]
+
+        # Insert the payment card into the payment_cards table
+        cursor.execute('''
+        INSERT INTO payment_cards (user_id, card_number, expiry_date, cvv)
+        VALUES (?, ?, ?, ?)
+        ''', (user_id, card_number, expiry_date, cvv))
+
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Payment card added successfully'}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def add_test_user(username):
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO users (username) VALUES (?)', (username,))
+    conn.commit()
+    conn.close()
+
+# Add a test user
+add_test_user('testuser')
+
+# Run the Flask app
 if __name__ == '__main__':
     app.run(debug=True)
