@@ -1,135 +1,143 @@
-from flask import Flask, request, redirect, url_for, render_template, session, make_response
-from datetime import timedelta
+from flask import Flask, request, redirect, url_for, make_response, jsonify
 import sqlite3
-import os
+import hashlib
+import uuid
 
-# Initialize the Flask app
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)  # Set session expiration time (30 minutes)
 
-# Database file
-DB_FILE = 'users.db'
-
-# Database initialization: creating tables if they do not exist
+# Initialize database
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
-    
     # Create users table
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL
-    )
-    ''')
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute("DROP TABLE IF EXISTS sessions")
     
-    # Create sessions table to store session tokens (for invalidation)
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        session_token TEXT NOT NULL,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
     ''')
-    
+    # Create sessions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id INTEGER,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
-# Helper function to get user by username
-def get_user(username):
-    conn = sqlite3.connect(DB_FILE)
+# Utility function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Utility function to add a test user
+def add_test_user():
+    conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username=?", (username,))
+    try:
+        cursor.execute('INSERT INTO users (username, password) VALUES (?, ?)', 
+                       ('testuser', hash_password('testpassword')))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # Ignore if the user already exists
+        pass
+    finally:
+        conn.close()
+
+# Initialize the database and add a test user
+init_db()
+add_test_user()
+
+# Route to login
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form.get('username')
+    password = request.form.get('password')
+    
+    # Verify user credentials
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM users WHERE username = ? AND password = ?', 
+                   (username, hash_password(password)))
     user = cursor.fetchone()
     conn.close()
-    return user
 
-# Helper function to create a new session token and invalidate the old ones
-def create_session(user_id):
-    conn = sqlite3.connect(DB_FILE)
+    if user:
+        # Create a session ID
+        session_id = str(uuid.uuid4())
+        user_id = user[0]
+
+        # Save the session in the database
+        conn = sqlite3.connect('users.db')
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO sessions (session_id, user_id) VALUES (?, ?)', 
+                       (session_id, user_id))
+        conn.commit()
+        conn.close()
+
+        # Set the session cookie
+        response = make_response(jsonify({"message": "Login successful"}))
+        response.set_cookie('session_id', session_id, httponly=True, samesite='Strict')
+        return response
+    else:
+        return jsonify({"message": "Invalid credentials"}), 401
+
+# Route to logout
+@app.route('/logout', methods=['POST'])
+def logout():
+    session_id = request.cookies.get('session_id')
+    if not session_id:
+        return jsonify({"message": "Not logged in"}), 401
+
+    # Remove the session from the database
+    conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
-
-    # Invalidate any previous sessions for this user
-    cursor.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
-    
-    # Create a new session token
-    new_session_token = os.urandom(24).hex()
-    cursor.execute("INSERT INTO sessions (user_id, session_token) VALUES (?, ?)", (user_id, new_session_token))
+    cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
     conn.commit()
     conn.close()
 
-    return new_session_token
+    # Clear the session cookie
+    response = make_response(jsonify({"message": "Logged out"}))
+    response.delete_cookie('session_id')
+    return response
 
-# Route to display login page
+# Protected route that requires authentication
+@app.route('/protected', methods=['GET'])
+def protected():
+    session_id = request.cookies.get('session_id')
+    if not session_id:
+        return jsonify({"message": "Unauthorized"}), 401
+
+    # Verify the session
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT user_id FROM sessions WHERE session_id = ?', (session_id,))
+    session = cursor.fetchone()
+    conn.close()
+
+    if session:
+        return jsonify({"message": "Access granted"})
+    else:
+        return jsonify({"message": "Unauthorized"}), 401
+
+# Home route for testing purposes
 @app.route('/')
-def login():
-    return render_template('login.html')
-
-# Route to handle login form submission
-@app.route('/login', methods=['POST'])
-def handle_login():
-    username = request.form['username']
-    password = request.form['password']
-    
-    # Authenticate the user
-    user = get_user(username)
-    if user and user[2] == password:  # Assuming password is in column 2
-        session.permanent = True
-        session['user_id'] = user[0]
-        
-        # Create a new session token and invalidate old sessions
-        session_token = create_session(user[0])
-        
-        # Set the session cookie (domain limited, not accessible for subdomains)
-        resp = make_response(redirect(url_for('dashboard')))
-        resp.set_cookie('session_token', session_token, httponly=True, secure=True, samesite='Lax', domain='your-domain.com')
-        
-        return resp
-    else:
-        return "Invalid credentials, please try again."
-
-# Route to display user dashboard (requires authentication)
-@app.route('/dashboard')
-def dashboard():
-    if 'user_id' in session:
-        user_id = session['user_id']
-        session_token = request.cookies.get('session_token')
-        
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM sessions WHERE user_id=? AND session_token=?", (user_id, session_token))
-        valid_session = cursor.fetchone()
-        conn.close()
-        
-        if valid_session:
-            return f"Welcome to your dashboard, User {user_id}!"
-        else:
-            return redirect(url_for('login'))
-    else:
-        return redirect(url_for('login'))
-
-# Route to handle logout (invalidate session)
-@app.route('/logout')
-def logout():
-    if 'user_id' in session:
-        user_id = session['user_id']
-        
-        # Invalidate session in the database
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
-        conn.commit()
-        conn.close()
-    
-    session.clear()  # Clear session data
-    resp = make_response(redirect(url_for('login')))
-    resp.delete_cookie('session_token', domain='your-domain.com')  # Remove cookie
-    return resp
+def home():
+    return '''
+    <h1>Login</h1>
+    <form action="/login" method="post">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <button type="submit">Login</button>
+    </form>
+    <br>
+    <a href="/protected">Go to protected page</a>
+    '''
 
 if __name__ == '__main__':
-    init_db()  # Initialize the database when the app starts
     app.run(debug=True)
-``

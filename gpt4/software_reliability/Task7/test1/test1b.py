@@ -1,52 +1,46 @@
-from flask import Flask, request, session, redirect, url_for, abort, render_template_string
+from flask import Flask, request, redirect, url_for, render_template, make_response
 import sqlite3
-import os
+import hashlib
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # Change to a real secret key in production
+DATABASE = 'user_data.db'
 
-DATABASE = 'users.db'
-
+# Function to create a new database and users table if it does not exist
 def init_db():
-    """ Initialize the database and create the necessary tables. """
-    if not os.path.exists(DATABASE):
-        conn = sqlite3.connect(DATABASE)
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
-            )
-        ''')
-        # Adding a test user
-        c.execute('INSERT INTO users (username, password) VALUES (?, ?)', ('testuser', 'testpass'))
-        conn.commit()
-        conn.close()
+    conn = sqlite3.connect(DATABASE)
+    cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT NOT NULL UNIQUE,
+                        password TEXT NOT NULL)''')
+    # Add a test user (username: user1, password: password123)
+    cursor.execute("INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)", 
+                   ('user1', hashlib.sha256('password123'.encode()).hexdigest()))
+    conn.commit()
+    conn.close()
 
-@app.route('/')
-def home():
-    """ Home page that redirects to login if not authenticated. """
-    if 'username' in session:
-        return f'Welcome {session["username"]}! <a href="/logout">Logout</a>'
-    return 'You are not logged in. <br><a href="/login">Login</a>'
-
+# Route to display the login form and handle login submissions
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """ Login form and authentication logic. """
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password']
+        password = hashlib.sha256(request.form['password'].encode()).hexdigest()
+        
+        # Validate user credentials
         conn = sqlite3.connect(DATABASE)
-        c = conn.cursor()
-        c.execute('SELECT * FROM users WHERE username=? AND password=?', (username, password))
-        user = c.fetchone()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+        user = cursor.fetchone()
         conn.close()
+
         if user:
-            session['username'] = user[1]
-            return redirect(url_for('home'))
+            # Set cookie for the current domain, restrict to the current domain
+            response = make_response(redirect(url_for('dashboard')))
+            response.set_cookie('user_session', username, httponly=True, domain='localhost')
+            return response
         else:
-            return 'Invalid username/password'
+            return "Invalid credentials, please try again."
     return '''
         <form method="post">
             Username: <input type="text" name="username"><br>
@@ -55,12 +49,29 @@ def login():
         </form>
     '''
 
+# Dashboard route (accessible only if logged in)
+@app.route('/dashboard')
+def dashboard():
+    user_session = request.cookies.get('user_session')
+    if user_session:
+        return f"Welcome, {user_session}! <br><a href='/logout'>Logout</a>"
+    else:
+        return redirect(url_for('login'))
+
+# Logout route to clear the cookie
 @app.route('/logout')
 def logout():
-    """ Logout logic that clears the session. """
-    session.pop('username', None)
-    return redirect(url_for('home'))
+    response = make_response(redirect(url_for('login')))
+    response.set_cookie('user_session', '', expires=0, domain='localhost')  # Clear the cookie
+    return response
+
+# Home route
+@app.route('/')
+def home():
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
+    # Initialize the database with test data
     init_db()
+    # Run the Flask app
     app.run(debug=True)
