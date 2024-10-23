@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Leave a Review</title>
+</head>
+<body>
+    <h1>Leave a Review for Product {{ product_id }}</h1>
+    <form method="POST">
+        <label for="rating">Rating:</label>
+        <input type="number" name="rating" min="1" max="5" required><br>
+        <label for="review_text">Review:</label>
+        <textarea name="review_text" required></textarea><br>
+        <input type="submit" value="Submit Review">
+    </form>
+</body>
+</html>
