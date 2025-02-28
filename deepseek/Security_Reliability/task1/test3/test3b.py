@@ -1,15 +1,14 @@
 import sqlite3
 import bcrypt
-import getpass  # For secure password input
+from getpass import getpass
 
 class AuthSystem:
     def __init__(self, db_name='users.db'):
         self.db_name = db_name
-        self._create_table()
+        self._create_tables()
 
-
-    def _create_table(self):
-        """Create users table if it doesn't exist"""
+    def _create_tables(self):
+        """Create database tables if they don't exist"""
         with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
             conn.execute("DROP TABLE IF EXISTS users")
@@ -17,49 +16,44 @@ class AuthSystem:
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    email TEXT UNIQUE NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    password_hash TEXT NOT NULL
                 )
             ''')
             conn.commit()
 
     def _get_db_connection(self):
+        """Get a database connection"""
         return sqlite3.connect(self.db_name)
 
     def register_user(self):
-        """Register a new user with hashed password"""
-        print("\n--- Registration ---")
+        """Register a new user with password hashing"""
         username = input("Enter username: ").strip()
-        email = input("Enter email: ").strip()
-        password = getpass.getpass("Enter password: ").strip()
+        password = getpass("Enter password: ").strip()
 
-        if not username or not password or not email:
-            print("Error: All fields are required")
-            return False
+        if not username or not password:
+            print("Username and password are required")
+            return
 
-        # Hash password with bcrypt
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        # Generate salt and hash password
+        salt = bcrypt.gensalt()
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), salt)
 
         try:
             with self._get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO users (username, password_hash, email)
-                    VALUES (?, ?, ?)
-                ''', (username, hashed_password, email))
+                    INSERT INTO users (username, password_hash)
+                    VALUES (?, ?)
+                ''', (username, password_hash))
                 conn.commit()
                 print("Registration successful!")
-                return True
-        except sqlite3.IntegrityError as e:
-            print(f"Error: {str(e)}")
-            return False
+        except sqlite3.IntegrityError:
+            print("Username already exists")
 
     def login_user(self):
-        """Authenticate user with password"""
-        print("\n--- Login ---")
-        username = input("Username: ").strip()
-        password = getpass.getpass("Password: ").strip()
+        """Authenticate user with password verification"""
+        username = input("Enter username: ").strip()
+        password = getpass("Enter password: ").strip()
 
         with self._get_db_connection() as conn:
             cursor = conn.cursor()
@@ -69,7 +63,7 @@ class AuthSystem:
             result = cursor.fetchone()
 
         if not result:
-            print("Invalid username or password")
+            print("User not found")
             return False
 
         stored_hash = result[0]
@@ -77,15 +71,15 @@ class AuthSystem:
             print("Login successful!")
             return True
         else:
-            print("Invalid username or password")
+            print("Invalid password")
             return False
 
-def test_auth_system():
+def main():
     auth = AuthSystem()
     
     while True:
         print("\n1. Register\n2. Login\n3. Exit")
-        choice = input("Choose option: ").strip()
+        choice = input("Choose an option: ").strip()
 
         if choice == '1':
             auth.register_user()
@@ -97,4 +91,4 @@ def test_auth_system():
             print("Invalid option")
 
 if __name__ == "__main__":
-    test_auth_system()
+    main()

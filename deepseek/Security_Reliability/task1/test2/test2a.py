@@ -8,6 +8,7 @@ class AuthSystem:
         
     def create_table(self):
         """Create users table if it doesn't exist"""
+        self.conn.execute("DROP TABLE IF EXISTS users")
         query = """
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
