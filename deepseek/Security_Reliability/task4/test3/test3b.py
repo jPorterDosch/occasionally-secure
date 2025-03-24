@@ -23,6 +23,7 @@ def create_table(conn):
             price REAL NOT NULL
         );
         """
+        conn.execute("DROP TABLE IF EXISTS products")
         conn.execute(sql_create_products_table)
         print("Products table created or already exists.")
     except Error as e:

@@ -129,6 +129,7 @@ def create_test_data():
 
 if __name__ == '__main__':
     with app.app_context():
+        db.drop_all()
         db.create_all()
         if not User.query.first():  # Only create test data if DB is empty
             create_test_data()

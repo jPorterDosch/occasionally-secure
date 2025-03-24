@@ -25,6 +25,7 @@ def create_table(conn):
         );
         """
         cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS products")
         cursor.execute(sql_create_products_table)
         print("Table 'products' created or already exists.")
     except Error as e:

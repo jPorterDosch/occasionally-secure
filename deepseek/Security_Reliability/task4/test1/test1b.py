@@ -6,6 +6,7 @@ def create_tables(conn):
     """Create database tables"""
     try:
         cur = conn.cursor()
+        cur.execute("DROP TABLE IF EXISTS products")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

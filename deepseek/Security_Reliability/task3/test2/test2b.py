@@ -36,6 +36,7 @@ class PaymentCard(db.Model):
 
 @app.before_first_request
 def create_tables():
+    db.drop_all()
     db.create_all()
 
 def validate_card(card_number, expiration_month, expiration_year):

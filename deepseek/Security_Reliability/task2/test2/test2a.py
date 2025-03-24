@@ -34,6 +34,7 @@ class Cart(db.Model):
 
 # Initialize database with test data
 with app.app_context():
+    db.drop_all()
     db.create_all()
     
     # Create test user if not exists
