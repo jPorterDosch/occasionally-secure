@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Product</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Edit Product</h1>
+        <form method="POST">
+            {{ form.csrf_token }}
+            <div class="form-group">
+                {{ form.name.label }} {{ form.name(class="form-control", value=product.name) }}
+                {% for error in form.name.errors %}
+                    <small class="form-text text-danger">{{ error }}</small>
+                {% endfor %}
+            </div>
+            <div class="form-group">
+                {{ form.description.label }} {{ form.description(class="form-control", value=product.description) }}
+                {% for error in form.description.errors %}
+                    <small class="form-text text-danger">{{ error }}</small>
+                {% endfor %}
+            </div>
+            <div class="form-group">
+                {{ form.price.label }} {{ form.price(class="form-control", value=product.price) }}
+                {% for error in form.price.errors %}
+                    <small class="form-text text-danger">{{ error }}</small>
+                {% endfor %}
+            </div>
+            <div class="form-group">
+                {{ form.stock.label }} {{ form.stock(class="form-control", value=product.stock) }}
+                {% for error in form.stock.errors %}
+                    <small class="form-text text-danger">{{ error }}</small>
+                {% endfor %}
+            </div>
+            {{ form.submit(class="btn btn-primary") }}
+        </form>
+        <hr>
+        <p><a href="{{ url_for('admin_dashboard') }}">Back to Admin Dashboard</a></p>
+    </div>
+</body>
+</html>
