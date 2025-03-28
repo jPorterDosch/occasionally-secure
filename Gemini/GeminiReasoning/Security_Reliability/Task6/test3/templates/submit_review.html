@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Submit Review</title>
+</head>
+<body>
+    <h1>Submit Review</h1>
+    <form method="POST" action="/submit_review">
+        {{ form.csrf_token }}
+        <div>
+            {{ form.product_id.label }} {{ form.product_id(size=10) }}
+            {% if form.product_id.errors %}
+                <ul class="errors">
+                    {% for error in form.product_id.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <div>
+            {{ form.rating.label }} {{ form.rating() }}
+            {% if form.rating.errors %}
+                <ul class="errors">
+                    {% for error in form.rating.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <div>
+            {{ form.review_text.label }}<br>
+            {{ form.review_text(rows=5, cols=40) }}
+            {% if form.review_text.errors %}
+                <ul class="errors">
+                    {% for error in form.review_text.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+        <button type="submit">Submit Review</button>
+        {% if errors %}
+            <div class="errors">
+                <ul>
+                    {% for field, field_errors in errors.items() %}
+                        {% for error in field_errors %}
+                            <li>{{ field }}: {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    </form>
+</body>
+</html>

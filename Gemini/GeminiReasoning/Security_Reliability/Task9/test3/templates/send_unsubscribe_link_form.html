@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Send Unsubscribe Link</title>
+</head>
+<body>
+    <h1>Send Unsubscribe Link</h1>
+    {% if session['user_id'] %}
+        <p>Logged in as User ID: {{ session['user_id'] }} <a href="{{ url_for('logout') }}">Logout</a></p>
+        <form method="POST">
+            <button type="submit">Send Unsubscribe Link to my email</button>
+        </form>
+    {% else %}
+        <p><a href="{{ url_for('login', user_id=1) }}">Login as User 1 (for testing)</a></p>
+    {% endif %}
+</body>
+</html>

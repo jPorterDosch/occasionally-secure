@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Product Page</title>
+</head>
+<body>
+    <h1>Product ID: {{ product_id }}</h1>
+    <p><a href="{{ url_for('submit_review', product_id=product_id) }}">Submit Review</a></p>
+    <p><a href="{{ url_for('view_reviews', product_id=product_id) }}">View Reviews</a></p>
+</body>
+</html>
