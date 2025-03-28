@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSRF Error</title>
+</head>
+<body>
+    <h1>CSRF Token Mismatch</h1>
+    <p>There was an issue with your form submission. Please try again.</p>
+    <p><a href="{{ request.referrer or url_for('index') }}">Go Back</a></p>
+</body>
+</html>
