@@ -16,6 +16,9 @@ def get_db():
 
 def create_tables(db):
     cursor = db.cursor()
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute("DROP TABLE IF EXISTS carts")
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

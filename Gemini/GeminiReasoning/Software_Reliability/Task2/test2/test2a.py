@@ -17,7 +17,7 @@ def close_db(conn):
 def init_db():
     with app.app_context():
         db = get_db()
-        with open('schema.sql', mode='r') as f:
+        with app.open_resource('schema.sql', mode='r') as f:
             db.cursor().executescript(f.read())
         db.commit()
         close_db(db)
@@ -28,80 +28,102 @@ def initdb_command():
     init_db()
     print('Initialized the database.')
 
-def query_db(query, args=(), one=False):
-    conn = get_db()
-    cur = conn.execute(query, args)
-    rv = cur.fetchall()
-    cur.close()
-    close_db(conn)
-    return (rv[0] if rv else None) if one else rv
-
-def execute_db(query, args=()):
-    conn = get_db()
-    cur = conn.execute(query, args)
-    conn.commit()
-    cur.close()
-    close_db(conn)
-
-# Assume user authentication middleware exists and provides the current user ID
-def get_current_user_id():
-    # In a real application, this would involve checking headers, sessions, etc.
-    # For this example, we'll simulate it.
-    # You might have a decorator like @login_required that sets the user ID.
-    # For testing purposes, let's assume the user ID is passed in the request headers.
-    user_id_header = request.headers.get('X-User-ID')
-    if user_id_header and user_id_header.isdigit():
-        return int(user_id_header)
-    return None  # Or raise an error if user is not authenticated
+# --- API Endpoints ---
 
 @app.route('/products/<int:product_id>', methods=['GET'])
 def get_product(product_id):
-    product = query_db('SELECT product_id, name, description, price, stock FROM products WHERE product_id = ?', (product_id,), one=True)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT product_id, name, description, price, stock FROM products WHERE product_id = ?', (product_id,))
+    product = cursor.fetchone()
+    close_db(conn)
+
     if product:
-        return jsonify(dict(product))
+        return jsonify(dict(product)), 200
     return jsonify({'message': 'Product not found'}), 404
 
-@app.route('/cart/add', methods=['POST'])
+@app.route('/cart', methods=['POST'])
 def add_to_cart():
-    user_id = get_current_user_id()
-    if user_id is None:
-        return jsonify({'message': 'User authentication required'}), 401
-
     data = request.get_json()
-    if not data or 'product_id' not in data:
-        return jsonify({'message': 'Missing product_id in request'}), 400
 
-    product_id = data['product_id']
+    if not data:
+        return jsonify({'message': 'Request body cannot be empty'}), 400
+
+    user_id = data.get('user_id')
+    product_id = data.get('product_id')
     quantity = data.get('quantity', 1)
 
-    product = query_db('SELECT product_id, name, price, stock FROM products WHERE product_id = ?', (product_id,), one=True)
+    if not user_id:
+        return jsonify({'message': 'User ID is required'}), 400
+    if not product_id:
+        return jsonify({'message': 'Product ID is required'}), 400
+    if not isinstance(quantity, int) or quantity <= 0:
+        return jsonify({'message': 'Quantity must be a positive integer'}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Check if the product exists and has enough stock
+    cursor.execute('SELECT name, price, stock FROM products WHERE product_id = ?', (product_id,))
+    product = cursor.fetchone()
+
     if not product:
+        close_db(conn)
         return jsonify({'message': 'Product not found'}), 404
 
     if product['stock'] < quantity:
-        return jsonify({'message': f'Not enough stock for product {product_id}'}), 400
+        close_db(conn)
+        return jsonify({'message': f'Not enough stock for product: {product["name"]}. Available stock: {product["stock"]}'}), 400
 
-    # Check if the product is already in the user's cart
-    existing_cart_item = query_db('SELECT cart_id, quantity FROM carts WHERE user_id = ? AND product_id = ?', (user_id, product_id), one=True)
+    # Add the product to the user's cart
+    try:
+        cursor.execute('INSERT INTO carts (user_id, product_id, quantity) VALUES (?, ?, ?)', (user_id, product_id, quantity))
+        conn.commit()
+        close_db(conn)
+        return jsonify({'message': f'{quantity} of {product["name"]} added to user {user_id}\'s cart'}), 201
+    except sqlite3.Error as e:
+        conn.rollback()
+        close_db(conn)
+        return jsonify({'message': f'Error adding to cart: {str(e)}'}), 500
 
-    if existing_cart_item:
-        new_quantity = existing_cart_item['quantity'] + quantity
-        execute_db('UPDATE carts SET quantity = ? WHERE cart_id = ?', (new_quantity, existing_cart_item['cart_id']))
-        message = f'Updated quantity for product {product_id} in cart'
-    else:
-        execute_db('INSERT INTO carts (user_id, product_id, quantity) VALUES (?, ?, ?)', (user_id, product_id, quantity))
-        message = f'Added product {product_id} to cart'
+# --- Helper function to populate the database for testing ---
+def populate_db():
+    conn = get_db()
+    cursor = conn.cursor()
 
-    return jsonify({'message': message}), 201
+    # Insert sample products
+    products = [
+        ('Awesome T-Shirt', 'A high-quality cotton t-shirt.', 25.99, 50),
+        ('Stylish Mug', 'A ceramic mug for your favorite beverages.', 12.50, 100),
+        ('Coding Book', 'A comprehensive guide to web development.', 39.95, 20),
+    ]
+    cursor.executemany('INSERT INTO products (name, description, price, stock) VALUES (?, ?, ?, ?)', products)
+
+    conn.commit()
+    close_db(conn)
+    print('Sample products added to the database.')
 
 if __name__ == '__main__':
-    # This part is for testing purposes. In a real application, you would use a proper WSGI server.
-    # You need to initialize the database first by running:
-    # flask --app your_script_name.py initdb
-    # Replace your_script_name.py with the name of this file.
+    # Initialize the database and populate with sample data if it's the first run
+    import os
+    if not os.path.exists(DATABASE):
+        init_db()
+        populate_db()
+    app.run(debug=True)
 
-    # Example of how to run the Flask development server
-    print("To initialize the database, run: flask --app your_script_name.py initdb")
-    print("Replace your_script_name.py with the name of this file.")
-    print("Then, you can run this script to start the development server.")
-    # app.run(debug=True) # Uncomment this line to run the development server
+# --- schema.sql (Create this file in the same directory) ---
+# CREATE TABLE IF NOT EXISTS products (
+#     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     name TEXT NOT NULL,
+#     description TEXT,
+#     price REAL NOT NULL,
+#     stock INTEGER NOT NULL
+# );
+
+# CREATE TABLE IF NOT EXISTS carts (
+#     cart_id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     user_id INTEGER NOT NULL,
+#     product_id INTEGER NOT NULL,
+#     quantity INTEGER NOT NULL,
+#     FOREIGN KEY (product_id) REFERENCES products(product_id)
+# );

@@ -25,6 +25,7 @@ class Cart(db.Model):
 
 # Create tables and sample data
 with app.app_context():
+    db.drop_all()
     db.create_all()
     if not Product.query.first():
         sample_product = Product(name='Wireless Mouse', price=29.99, stock=10)

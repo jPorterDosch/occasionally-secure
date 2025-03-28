@@ -8,6 +8,7 @@ def create_users_table():
     """Creates the users table in the database if it doesn't exist."""
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
+    cursor.execute("DROP TABLE IF EXISTS users")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,200 +1,148 @@
 from flask import Flask, request, jsonify
-import sqlite3
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+import os
 
+# Initialize Flask application
 app = Flask(__name__)
-DATABASE = 'ecommerce.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///ecommerce.db'
+db = SQLAlchemy(app)
 
-def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-    return conn
+# Database Models
+class User(db.Model):
+    user_id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    carts = db.relationship('Cart', backref='user', lazy=True)
 
-def init_db():
+class Product(db.Model):
+    product_id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, nullable=False)
+
+class Cart(db.Model):
+    cart_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.user_id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.product_id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+
+    # Add a unique constraint to prevent duplicate items in the cart for the same user
+    __table_args__ = (db.UniqueConstraint('user_id', 'product_id', name='_user_product_uc'),)
+
+# Function to create database tables if they don't exist
+def create_tables():
     with app.app_context():
-        db = get_db()
-        with open('schema.sql', mode='r') as f:
-            db.cursor().executescript(f.read())
-        db.commit()
+        db.create_all()
 
-@app.cli.command('initdb')
-def initdb_command():
-    """Initializes the database."""
-    init_db()
-    print('Initialized the database.')
+# Sample data (for testing purposes)
+def insert_sample_data():
+    with app.app_context():
+        # Check if users or products already exist
+        if not User.query.first():
+            user1 = User(username='user1')
+            user2 = User(username='user2')
+            db.session.add_all([user1, user2])
+            db.session.commit()
 
-def query_db(query, args=(), one=False):
-    cur = get_db().execute(query, args)
-    rv = cur.fetchall()
-    cur.close()
-    return (rv[0] if rv else None) if one else rv
+        if not Product.query.first():
+            product1 = Product(name='Laptop', price=1200.00, stock=10)
+            product2 = Product(name='Mouse', price=25.00, stock=50)
+            product3 = Product(name='Keyboard', price=75.00, stock=0)
+            db.session.add_all([product1, product2, product3])
+            db.session.commit()
 
-def execute_db(query, args=()):
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute(query, args)
-    conn.commit()
-    cur.close()
-
-# --- API Endpoints ---
-
+# API endpoint to retrieve product information by product ID
 @app.route('/products/<int:product_id>', methods=['GET'])
 def get_product(product_id):
-    """Retrieves product information by product ID."""
-    product = query_db('SELECT id, name, description, price, stock FROM products WHERE id = ?', (product_id,), one=True)
+    product = Product.query.get(product_id)
     if product:
-        return jsonify(dict(product))
-    return jsonify({'error': 'Product not found'}), 404
+        return jsonify({
+            'product_id': product.product_id,
+            'name': product.name,
+            'price': product.price,
+            'stock': product.stock
+        })
+    return jsonify({'message': 'Product not found'}), 404
 
+# API endpoint to add products to the user's cart
 @app.route('/cart/add', methods=['POST'])
 def add_to_cart():
-    """Adds a product to the user's cart."""
     data = request.get_json()
-    user_id = data.get('user_id')
+    user_id = data.get('user_id')  # In a real application, this would come from user authentication
     product_id = data.get('product_id')
     quantity = data.get('quantity', 1)
 
     if not user_id or not product_id:
-        return jsonify({'error': 'Missing user_id or product_id'}), 400
+        return jsonify({'message': 'Missing user_id or product_id'}), 400
 
-    if quantity <= 0:
-        return jsonify({'error': 'Quantity must be greater than zero'}), 400
+    user = User.query.get(user_id)
+    product = Product.query.get(product_id)
 
-    # Check if the product exists and has enough stock
-    product = query_db('SELECT id, name, price, stock FROM products WHERE id = ?', (product_id,), one=True)
+    if not user:
+        return jsonify({'message': 'User not found'}), 404
     if not product:
-        return jsonify({'error': 'Product not found'}), 404
-
-    if product['stock'] < quantity:
-        return jsonify({'error': f'Not enough stock for product {product_id}'}), 400
+        return jsonify({'message': 'Product not found'}), 404
+    if product.stock < quantity:
+        return jsonify({'message': 'Not enough stock'}), 400
+    if quantity <= 0:
+        return jsonify({'message': 'Quantity must be greater than zero'}), 400
 
     # Check if the product is already in the user's cart
-    existing_cart_item = query_db('SELECT id, quantity FROM carts WHERE user_id = ? AND product_id = ?', (user_id, product_id), one=True)
+    cart_item = Cart.query.filter_by(user_id=user_id, product_id=product_id).first()
 
-    if existing_cart_item:
-        new_quantity = existing_cart_item['quantity'] + quantity
-        execute_db('UPDATE carts SET quantity = ? WHERE id = ?', (new_quantity, existing_cart_item['id']))
+    if cart_item:
+        cart_item.quantity += quantity
     else:
-        execute_db('INSERT INTO carts (user_id, product_id, quantity, price_at_add) VALUES (?, ?, ?, ?)', (user_id, product_id, quantity, product['price']))
+        new_cart_item = Cart(user_id=user_id, product_id=product_id, quantity=quantity)
+        db.session.add(new_cart_item)
 
-    # Optionally, decrease the product stock (depending on your business logic)
-    new_stock = product['stock'] - quantity
-    execute_db('UPDATE products SET stock = ? WHERE id = ?', (new_stock, product_id))
+    # Decrease the product stock
+    product.stock -= quantity
+    db.session.commit()
 
-    return jsonify({'message': f'Added {quantity} of product {product_id} to user {user_id}\'s cart'}), 201
+    return jsonify({'message': 'Product added to cart successfully'}), 201
 
-# --- Initialization and Testing ---
-
+# --- Testing the functionality ---
 if __name__ == '__main__':
-    # Create the database and tables if they don't exist
-    with app.app_context():
-        init_db()
+    # Create database tables
+    create_tables()
 
-    # Example usage for testing (you can run this in a separate Python script or using curl)
-    import requests
-    import json
+    # Insert sample data if the database is empty
+    insert_sample_data()
 
-    BASE_URL = 'http://127.0.0.1:5000'
+    # Start the Flask development server
+    print("API is running. You can test the following endpoints:")
+    print("  - Get product: GET http://127.0.0.1:5000/products/<product_id>")
+    print("  - Add to cart: POST http://127.0.0.1:5000/cart/add (JSON body: {'user_id': <user_id>, 'product_id': <product_id>, 'quantity': <quantity> (optional)})")
+    print("\nExample usage using Python's requests library:")
+    print("""
+import requests
+import json
 
-    # --- Helper functions for testing ---
+# Get product
+product_id_to_get = 1
+response_get = requests.get(f'http://127.0.0.1:5000/products/{product_id_to_get}')
+print(f"Get Product Response ({product_id_to_get}): {response_get.status_code} - {response_get.json()}")
 
-    def create_test_data():
-        conn = get_db()
-        cursor = conn.cursor()
+# Add to cart
+add_to_cart_data = {'user_id': 1, 'product_id': 2, 'quantity': 2}
+response_post = requests.post('http://127.0.0.1:5000/cart/add', json=add_to_cart_data)
+print(f"Add to Cart Response: {response_post.status_code} - {response_post.json()}")
 
-        # Create users table if not exists
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL
-            )
-        ''')
-        # Add some test users
-        cursor.execute("INSERT OR IGNORE INTO users (id, username) VALUES (?, ?)", (1, 'user1'))
-        cursor.execute("INSERT OR IGNORE INTO users (id, username) VALUES (?, ?)", (2, 'user2'))
+# Try to add more than available stock
+add_to_cart_data_exceed_stock = {'user_id': 1, 'product_id': 1, 'quantity': 15}
+response_post_exceed = requests.post('http://127.0.0.1:5000/cart/add', json=add_to_cart_data_exceed_stock)
+print(f"Add to Cart Response (Exceed Stock): {response_post_exceed.status_code} - {response_post_exceed.json()}")
 
-        # Create products table if not exists
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS products (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                description TEXT,
-                price REAL NOT NULL,
-                stock INTEGER NOT NULL
-            )
-        ''')
-        # Add some test products
-        cursor.execute("INSERT OR IGNORE INTO products (id, name, description, price, stock) VALUES (?, ?, ?, ?, ?)", (1, 'Laptop', 'Powerful laptop', 1200.00, 10))
-        cursor.execute("INSERT OR IGNORE INTO products (id, name, description, price, stock) VALUES (?, ?, ?, ?, ?)", (2, 'Mouse', 'Wireless mouse', 25.00, 50))
-        cursor.execute("INSERT OR IGNORE INTO products (id, name, description, price, stock) VALUES (?, ?, ?, ?, ?)", (3, 'Keyboard', 'Mechanical keyboard', 75.00, 0))
+# Try to add a product that doesn't exist
+add_to_cart_data_invalid_product = {'user_id': 1, 'product_id': 999, 'quantity': 1}
+response_post_invalid_product = requests.post('http://127.0.0.1:5000/cart/add', json=add_to_cart_data_invalid_product)
+print(f"Add to Cart Response (Invalid Product): {response_post_invalid_product.status_code} - {response_post_invalid_product.json()}")
 
-        # Create carts table if not exists
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS carts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                product_id INTEGER NOT NULL,
-                quantity INTEGER NOT NULL,
-                price_at_add REAL NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (product_id) REFERENCES products(id)
-            )
-        ''')
-
-        conn.commit()
-        conn.close()
-        print("Test data created/verified.")
-
-    create_test_data()
-
-    print("\n--- Testing API ---")
-
-    # Test get_product
-    print("\n--- Testing GET /products/1 ---")
-    response = requests.get(f'{BASE_URL}/products/1')
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    print("\n--- Testing GET /products/3 (out of stock) ---")
-    response = requests.get(f'{BASE_URL}/products/3')
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    print("\n--- Testing POST /cart/add (add product 2 for user 1) ---")
-    payload = {'user_id': 1, 'product_id': 2, 'quantity': 2}
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(f'{BASE_URL}/cart/add', data=json.dumps(payload), headers=headers)
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    print("\n--- Testing POST /cart/add (add product 1 for user 1) ---")
-    payload = {'user_id': 1, 'product_id': 1, 'quantity': 1}
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(f'{BASE_URL}/cart/add', data=json.dumps(payload), headers=headers)
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    print("\n--- Testing POST /cart/add (add more of product 2 for user 1) ---")
-    payload = {'user_id': 1, 'product_id': 2, 'quantity': 3}
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(f'{BASE_URL}/cart/add', data=json.dumps(payload), headers=headers)
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    print("\n--- Testing POST /cart/add (try to add out of stock product 3 for user 2) ---")
-    payload = {'user_id': 2, 'product_id': 3, 'quantity': 1}
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(f'{BASE_URL}/cart/add', data=json.dumps(payload), headers=headers)
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    print("\n--- Testing POST /cart/add (try to add more than available stock for product 1 for user 2) ---")
-    response_get_product1 = requests.get(f'{BASE_URL}/products/1')
-    current_stock_product1 = response_get_product1.json().get('stock', 0)
-    payload = {'user_id': 2, 'product_id': 1, 'quantity': current_stock_product1 + 1}
-    headers = {'Content-Type': 'application/json'}
-    response = requests.post(f'{BASE_URL}/cart/add', data=json.dumps(payload), headers=headers)
-    print(f"Status Code: {response.status_code}")
-    print(f"Response Body: {response.json()}")
-
-    # Run the Flask development server
+# Try to add to cart for a user that doesn't exist
+add_to_cart_data_invalid_user = {'user_id': 999, 'product_id': 2, 'quantity': 1}
+response_post_invalid_user = requests.post('http://127.0.0.1:5000/cart/add', json=add_to_cart_data_invalid_user)
+print(f"Add to Cart Response (Invalid User): {response_post_invalid_user.status_code} - {response_post_invalid_user.json()}")
+    """)
     app.run(debug=True)

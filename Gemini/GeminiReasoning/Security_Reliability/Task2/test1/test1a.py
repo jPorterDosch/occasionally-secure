@@ -21,6 +21,10 @@ def create_tables():
     cursor = conn.cursor()
 
     # Create products table
+    cursor.execute("DROP TABLE IF EXISTS products")
+    cursor.execute("DROP TABLE IF EXISTS carts")
+    cursor.execute("DROP TABLE IF EXISTS users")
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS products (
             product_id INTEGER PRIMARY KEY AUTOINCREMENT,
