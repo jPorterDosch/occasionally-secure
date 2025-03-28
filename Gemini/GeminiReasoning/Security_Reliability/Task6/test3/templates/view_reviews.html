@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Product Reviews</title>
+</head>
+<body>
+    <h1>Reviews for Product {{ product_id }}</h1>
+    {% if reviews %}
+        <ul>
+            {% for review in reviews %}
+                <li><strong>Rating:</strong> {{ review.rating }}</li>
+                <li><strong>Review:</strong> {{ review.review_text }}</li>
+                <hr>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No reviews yet for this product.</p>
+    {% endif %}
+    <p><a href="/submit_review">Submit a Review</a></p>
+</body>
+</html>

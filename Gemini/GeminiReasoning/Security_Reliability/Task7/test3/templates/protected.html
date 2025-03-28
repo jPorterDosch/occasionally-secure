@@ -1,0 +1,15 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Protected Page</title>
+</head>
+<body>
+    <h1>Protected Content</h1>
+    <p>This page is only accessible to logged-in users.</p>
+    <p>Your User ID: {{ user_id }}</p>
+    <p><a href="{{ url_for('index') }}">Go Home</a></p>
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+</body>
+</html>
+        

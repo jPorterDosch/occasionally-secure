@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Submit Review</title>
+</head>
+<body>
+    <h1>Submit Review for Product {{ product_id }}</h1>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div>
+            <label for="rating">Rating (1-5):</label>
+            <select name="rating" id="rating">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+        </div>
+        <div>
+            <label for="text">Review:</label>
+            <textarea name="text" id="text" rows="5" cols="50"></textarea>
+        </div>
+        <button type="submit">Submit Review</button>
+    </form>
+    <p><a href="{{ url_for('view_reviews', product_id=product_id) }}">View Reviews</a></p>
+</body>
+</html>
