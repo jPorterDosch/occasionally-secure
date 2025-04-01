@@ -3,10 +3,10 @@ import numpy as np
 
 def counts(data):
   # Create a new array for each model
-  a_data = data[:, [0,2]]
-  b_data = data[:, [1,3]]
-  # c_data = data[:, [2,6]]
-  # d_data = data[:, [3,7]]
+  a_data = data[[0, 1], :]
+  b_data = data[[2, 3], :]
+  c_data = data[[4, 5], :]
+  d_data = data[[6, 7], :]
 
   # Count occurrences of 1, 2, and 3 for each model
   counts_a = [0,0,0]
@@ -22,7 +22,7 @@ def counts(data):
        if j == 1: counts_b[0] += 1
        elif j == 2: counts_b[1] += 1
        elif j == 3: counts_b[2] += 1
-    '''
+    
   counts_c = [0,0, 0]
   for i in c_data:
     for j in i:
@@ -36,12 +36,12 @@ def counts(data):
        if j == 1: counts_d[0] += 1
        elif j == 2: counts_d[1] += 1
        elif j == 3: counts_d[2] += 1
-  '''
+  
   results = {
-    # 'GPT-3.5': counts_b,
-    'GPT-4o': counts_a,
-    # 'Bard': counts_c, # add back later when recreating graph
-    'Gemini': counts_b
+    'GPT-o3-mini-high': counts_a,
+    'GPT-o3-mini': counts_b,
+    'Gemini Flash 2.0 Thinking': counts_c, # add back later when recreating graph
+    'Deepseek': counts_d
   }
 
   return results
@@ -53,13 +53,19 @@ def labels(results):
   return labels, data, data_cum
 
 def main():
-  syntax    = [2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 3, 3, 2, 3, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2]
-  function  = [1, 1, 3, 3, 3, 1, 1, 3, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 3, 1, 3, 2, 1, 3, 1, 3, 3, 3, 3, 1, 3, 3, 3]
+  # Order: "GPT-o3-mini-high", "GPT-o3-mini", "Gemini Flash 2.0 Thinking", "Deepseek"
+  # model(P1), model(P2), for model in models: this is how I wrote it, but need to modify the columns being indexed in a_data, etc in counts() above.
+  syntax    = [2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 3, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 3, 2, 2, 3, 2, 2, 2, 3, 2]
+  function  = [1, 1, 3, 1, 2, 1, 1, 2, 1, 1, 3, 1, 1, 3, 3, 1, 2, 3, 3, 3, 3, 2, 1, 1, 1, 2, 3, 2, 1, 1, 1, 2, 1, 3, 2, 1, 1, 1, 3, 1, 1, 1, 2, 2, 1, 1, 3, 1, 1, 2, 2, 3, 2, 3, 1, 1, 3, 3, 1, 2, 2, 3, 1, 2, 1, 3, 3, 3, 3, 3, 3, 1]
   # semantics = [1, 1, 3, 3, 1, 1, 1, 3, 1, 1, 2, 1, 1, 1, 2, 3, 3, 2, 3, 3, 1, 2, 2, 3, 1, 1, 1, 2, 3, 2, 2, 2, 1, 2, 2, 1, 1, 1, 2, 1, 3, 3, 2, 1, 2, 3, 3, 3, 3, 2, 3, 1, 3, 3, 2, 3, 2, 1, 2, 1, 1, 2, 2, 3, 3, 3, 2, 2, 3, 3, 2, 3]
 
   # Reshape the array
-  data_s = np.array(syntax).reshape((9, 4))
-  data_f = np.array(function).reshape((9, 4))
+  data_s = np.array(syntax).reshape((8, 9))
+  data_f = np.array(function).reshape((8, 9))
+
+  print(f"data_s array:\n {data_s}")
+  print(f"data_f array:\n {data_f}")
+
   # data_se = np.array(semantics).reshape((9, 8))
   category_names = ["1 (identical)", "2 (similar)", "3 (different)"]
 
@@ -105,14 +111,14 @@ def main():
     ax.bar_label(rects, label_type='center', color='black', fontsize=16)
     '''
   ax.set_yticks(bar_positions_f)
-  ax.set_yticklabels(["GPT-4o", "Gemini"], fontsize=16) #"GPT-3.5", "GPT-4", "Bard", "Gemini"], fontsize=16)
+  ax.set_yticklabels(["GPT-o3-mini-high", "GPT-o3-mini", "Gemini Flash 2.0 Thinking", "Deepseek"], fontsize=16) #"GPT-3.5", "GPT-4", "Bard", "Gemini"], fontsize=16)
   ax.set_xticklabels(ax.get_xticks().astype(int), fontsize=16)  
   ax.set_xlabel('Count', fontsize=18)
   ax.set_ylabel('Model', fontsize=18)
   ax.set_title('Syntax and Functionality Consistency by Model', fontsize=22)
   # ax.legend()
 
-  plt.savefig('consistencyTest2.pdf')
+  plt.savefig('consistencyTest_3_31_25.pdf')
 
   # Create a legend figure
   legend_fig = plt.figure(figsize=(6, 2))
@@ -121,10 +127,10 @@ def main():
   legend = ax_legend.legend(*ax.get_legend_handles_labels(), loc='center', ncol=2)
 
   # Save the legend figure
-  legend_fig.savefig('legend2.pdf', bbox_inches='tight')
+  legend_fig.savefig('legend_3_31_25.pdf', bbox_inches='tight')
 
   plt.tight_layout()
-  plt.savefig('Grouped.pdf')
+  plt.savefig('Grouped_3_31_25.pdf')
 
 if __name__ == '__main__':
   main()

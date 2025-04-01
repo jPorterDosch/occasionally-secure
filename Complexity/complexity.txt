@@ -1,6 +1,6 @@
 # Task 1 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 95:0 login - A (5)
@@ -194,7 +194,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 50:0 login - B (6)
@@ -288,7 +288,7 @@ task.py:
         effort: 93.20902501875007
         time: 5.178279167708337
         bugs: 0.015534837503125011
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 19:0 register_user - A (3)
@@ -367,8 +367,10 @@ task.py:
         effort: 1.0
         time: 0.05555555555555555
         bugs: 0.0006666666666666666
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 57:0 add_card - B (8)
@@ -475,7 +477,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 49:0 login - A (5)
@@ -568,7 +570,7 @@ task.py:
         effort: 47.548875021634686
         time: 2.6416041678685938
         bugs: 0.010566416671474375
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 17:0 validate_registration_form - B (6)
@@ -704,9 +706,11 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 2 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 64:0 add_to_cart - A (4)
@@ -816,7 +820,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 71:0 add_to_cart - B (6)
@@ -937,7 +941,7 @@ task.py:
         effort: 87.5668628467566
         time: 4.864825713708701
         bugs: 0.01729715809318649
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 35:0 add_to_cart - A (3)
@@ -1018,8 +1022,10 @@ task.py:
         effort: 36.0
         time: 2.0
         bugs: 0.008 
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 75:0 query_db - A (3)
@@ -1182,7 +1188,7 @@ task.py:
         effort: 2.3774437510817346
         time: 0.1320802083934297
         bugs: 0.0015849625007211565
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 52:0 get_product - A (3)
@@ -1278,7 +1284,7 @@ task.py:
         effort: 15.509775004326936
         time: 0.861654166907052
         bugs: 0.005169925001442312
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 59:0 add_to_cart - A (4)
@@ -1403,9 +1409,11 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 3 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 56:0 add_card - B (6)
@@ -1528,7 +1536,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 34:0 add_payment_card - A (5)
@@ -1607,7 +1615,7 @@ task.py:
         effort: 36.0
         time: 2.0
         bugs: 0.008
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 27:0 add_card - B (6)
@@ -1688,8 +1696,10 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 57:0 add_card - B (8)
@@ -1796,7 +1806,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 56:0 register_card - A (5)
@@ -1903,7 +1913,7 @@ task.py:
         effort: 25.26619429851844
         time: 1.403677461028802
         bugs: 0.008422064766172813
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 39:0 validate_expiration_date - A (4)
@@ -2024,9 +2034,11 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 4 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 44:0 search - A (3)
@@ -2147,7 +2159,7 @@ task.py:
         effort: 18.094737505048094
         time: 1.0052631947248942
         bugs: 0.006031579168349364
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 41:0 search - A (4)
@@ -2268,7 +2280,7 @@ task.py:
         effort: 3.1699250014423126
         time: 0.17610694452457293
         bugs: 0.002113283334294875
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 49:0 search_products - A (4)
@@ -2375,8 +2387,10 @@ task.py:
         effort: 1.0
         time: 0.05555555555555555
         bugs: 0.0006666666666666666
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 65:0 search - B (8)
@@ -2483,7 +2497,7 @@ task.py:
         effort: 3.1699250014423126
         time: 0.17610694452457293
         bugs: 0.002113283334294875
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 21:0 search_products - C (17)
@@ -2576,7 +2590,7 @@ task.py:
         effort: 1049.908525778142
         time: 58.328251432118996
         bugs: 0.0957811286674796
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     M 25:4 ProductSearch.search_products - B (10)
@@ -2698,9 +2712,11 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 5 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 90:0 update_product - A (3)
@@ -2877,7 +2893,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 60:0 remove_product - A (3)
@@ -2998,7 +3014,7 @@ task.py:
         effort: 11.60964047443681
         time: 0.6449800263576005
         bugs: 0.0038698801581456034
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 138:0 login - A (4)
@@ -3190,8 +3206,10 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 69:0 login - A (3)
@@ -3344,7 +3362,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 52:0 edit_product - A (4)
@@ -3493,7 +3511,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 111:0 edit_product - A (5)
@@ -3631,9 +3649,11 @@ task.py:
         effort: 11.60964047443681
         time: 0.6449800263576005
         bugs: 0.0038698801581456034
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 6 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 38:0 review_product - B (10)
@@ -3712,7 +3732,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 39:0 add_review - A (4)
@@ -3805,7 +3825,7 @@ task.py:
         effort: 33.0
         time: 1.8333333333333333
         bugs: 0.011
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 75:0 add_review - B (7)
@@ -3870,8 +3890,10 @@ task.py:
         effort: 514.3094432915962
         time: 28.572746849533118
         bugs: 0.03745671015569048
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 59:0 add_review - A (4)
@@ -3955,7 +3977,7 @@ task.py:
         effort: 3.1699250014423126
         time: 0.17610694452457293
         bugs: 0.002113283334294875
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 77:0 submit_review - B (6)
@@ -4066,7 +4088,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 67:0 submit_review - C (11)
@@ -4173,9 +4195,11 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 7 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 37:0 login - A (4)
@@ -4311,7 +4335,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 59:0 login - A (5)
@@ -4474,7 +4498,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 55:0 login - A (3)
@@ -4595,8 +4619,10 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 98:0 profile - A (3)
@@ -4745,7 +4771,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 42:0 check_session - A (5)
@@ -4908,7 +4934,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 76:0 check_session - B (6)
@@ -5044,9 +5070,11 @@ task.py:
         effort: 42.11032383086406
         time: 2.3394624350480036
         bugs: 0.007486279792153611
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 8 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 65:0 checkout - B (7)
@@ -5111,7 +5139,7 @@ task.py:
         effort: 111.01319154423277
         time: 6.167399530235154
         bugs: 0.01850219859070546
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 87:0 checkout - B (6)
@@ -5246,7 +5274,7 @@ task.py:
         effort: 61.021056277764515
         time: 3.3900586820980285
         bugs: 0.011623058338621813
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 142:0 checkout - A (3)
@@ -5479,8 +5507,10 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 117:0 checkout - B (6)
@@ -5657,7 +5687,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 60:0 checkout - B (7)
@@ -5792,7 +5822,7 @@ task.py:
         effort: 33.0
         time: 1.8333333333333333
         bugs: 0.011
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 98:0 checkout - A (4)
@@ -5920,9 +5950,11 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 # Task 9 Results
 ## Persona 1
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 89:0 login - A (3)
@@ -6155,7 +6187,7 @@ task.py:
         effort: 2.3774437510817346
         time: 0.1320802083934297
         bugs: 0.0015849625007211565
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 42:0 unsubscribe - A (3)
@@ -6262,7 +6294,7 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 50:0 generate_unsubscribe_link - A (3)    
@@ -6397,8 +6429,10 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
 ## Persona 2
-### GPT-4o
+### GPT-o3-mini-high
 #### Cyclomatic Complexity test
 task.py
     F 77:0 unsubscribe - B (7)
@@ -6548,7 +6582,7 @@ task.py:
         effort: 15.509775004326936
         time: 0.861654166907052
         bugs: 0.005169925001442312
-### GPT-3.5
+### GPT-o3-mini
 #### Cyclomatic Complexity test
 task.py
     F 60:0 confirm_unsubscribe - A (5)
@@ -6669,7 +6703,7 @@ task.py:
         effort: 2.3774437510817346
         time: 0.1320802083934297
         bugs: 0.0015849625007211565
-### Gemini
+### Gemini Flash 2.0 Reasoning
 #### Cyclomatic Complexity test
 task.py
     F 66:0 unsubscribe - A (3)
@@ -6874,3 +6908,5 @@ task.py:
         effort: 0
         time: 0.0
         bugs: 0.0
+### Deepseek
+#### Cyclomatic Complexity test
