@@ -38,10 +38,10 @@ def main():
     #   m = 2
     #   a = 0
     elif l == "### GPT-3.5": 
-      m = 1
+      m = 0
       a = 0 
     elif l == "### GPT-4o": 
-      m = 0
+      m = 1
       a = 0
     elif l == "### Gemini": 
       m = 2
@@ -120,11 +120,11 @@ def main():
       pb[j//6] += complex_results[i][j]
       ps[j//6] += float(complex_results[i][j+1].split('(')[1].split(')')[0])
     print(f"Task {i+1} ", end="")
-    for k in (2,0,4):
+    for k in (0,2,4):
       print(f"& {(task[k]+task[k+6])/2}; \color{{blue}}{round((task[k+1]+task[k+1+6])/2,2)} ", end="")
     print(f"& {round(persona_b[0]/3,2)}; \color{{blue}}{round(persona_s[0]/3,2)} & {round(persona_b[1]/3,2)}; \color{{blue}}{round(persona_s[1]/3,2)} \\\\")
   print("\\hline")
-  print(f"Average & {round(b[1]/9/2,2)}; \color{{blue}}{round(s[1]/9/2,2)} & {round(b[0]/9/2,2)}; \color{{blue}}{round(s[0]/9/2,2)} & {round(b[2]/9/2,2)}; \color{{blue}}{round(s[2]/9/2,2)} & {round(pb[0]/9/3,2)}; \color{{blue}}{round(ps[0]/9/3,2)} & {round(pb[1]/9/3,2)}; \color{{blue}}{round(ps[1]/9/3,2)} \\\\")
+  print(f"Average & {round(b[0]/9/2,2)}; \color{{blue}}{round(s[0]/9/2,2)} & {round(b[1]/9/2,2)}; \color{{blue}}{round(s[1]/9/2,2)} & {round(b[2]/9/2,2)}; \color{{blue}}{round(s[2]/9/2,2)} & {round(pb[0]/9/3,2)}; \color{{blue}}{round(ps[0]/9/3,2)} & {round(pb[1]/9/3,2)}; \color{{blue}}{round(ps[1]/9/3,2)} \\\\")
 
   # Then we look at things like LoC and comments
   print("\n\nLoC and comments\n")
@@ -180,11 +180,11 @@ def main():
       persona_c[j//6] += int(raw[i][j+1])
 
     print(f"Task {i+1} ", end="")
-    for k in (2,0,4):
+    for k in (0,2,4):
       print(f"& {(code[k]+code[k+6])/2}; \color{{blue}}{round((code[k+1]+code[k+1+6])/2,2)} ", end="")
     print(f"& {round(persona_l[0]/3,2)}; \color{{blue}}{round(persona_c[0]/3,2)} & {round(persona_l[1]/3,2)}; \color{{blue}}{round(persona_c[1]/3,2)} \\\\")
   print("\\hline")
-  print(f"Average & {round(l[1]/9/2,2)}; \color{{blue}}{round(c[1]/9/2,2)} & {round(l[0]/9/2,2)}; \color{{blue}}{round(c[0]/9/2,2)} & {round(l[2]/9/2,2)}; \color{{blue}}{round(c[2]/9/2,2)} & {round(pl[0]/9/3,2)}; \color{{blue}}{round(pc[0]/9/3,2)} & {round(pl[1]/9/3,2)}; \color{{blue}}{round(pc[1]/9/3,2)} \\\\")
+  print(f"Average & {round(l[0]/9/2,2)}; \color{{blue}}{round(c[0]/9/2,2)} & {round(l[1]/9/2,2)}; \color{{blue}}{round(c[1]/9/2,2)} &{round(l[2]/9/2,2)}; \color{{blue}}{round(c[2]/9/2,2)} & {round(pl[0]/9/3,2)}; \color{{blue}}{round(pc[0]/9/3,2)} & {round(pl[1]/9/3,2)}; \color{{blue}}{round(pc[1]/9/3,2)} \\\\")
 
   # Num external libraries
   print("\nExternal library calls")
