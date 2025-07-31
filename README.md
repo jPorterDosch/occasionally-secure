@@ -15,23 +15,25 @@ We evaluate a range of web-facing LLMs using a set of security-related programmi
 Model responses were manually collected via public web interfaces and are organized by model and persona type. This repository provides the data and scripts used for analysis.
 
 ## Repository Structure
-
+```
 .
 ├── Complexity/
-│ └── Scripts for measuring cyclomatic complexity
+│   └── Scripts for measuring cyclomatic complexity
 ├── Consistency/
-│ └── Scripts for evaluating reliability (syntax, functionality, semantics)
+│   └── Scripts for evaluating reliability (syntax, functionality, semantics)
 ├── Gemini/
-│ ├── Gemini/
-│ │ ├── Security Persona/
-│ │ ├── Software Engineer Persona/
-│ │ ├── Security Reliability/
-│ │ └── Software Reliability/
-│ └── Gemini_reasoning/
-| └── [Organized similarly to Gemini by persona and reliability type]
+│   ├── Gemini/
+│   │   ├── Security Persona/
+│   │   ├── Software Engineer Persona/
+│   │   ├── Security Reliability/
+│   │   └── Software Reliability/
+│   └── Gemini_reasoning/
+│       └── [Organized similarly to Gemini by persona and reliability type]
 ├── [Other LLM folders]/
-│ └── [Organized similarly by persona and reliability type]
+│   └── [Organized similarly by persona and reliability type]
 ├── README.md
+└── [Additional scripts and model outputs]
+```
 
 
 ## Data Collection
@@ -39,8 +41,8 @@ Model responses were manually collected via public web interfaces and are organi
 Model generations were collected manually through browser interactions with LLMs. Evaluation data is stored in tabular form (currently as a Google Sheet) and includes:
 
 - Number of revisions required
-- Execution and correction time
-- Reliability ratings (syntax, functionality, semantics)
+
+- Reliability ratings (syntax, functionality)
 
 An export of the cleaned dataset will be added to this repository in a future update.
 
@@ -57,10 +59,11 @@ python Complexity/com.py
 Reliability Evaluation
 
 The Consistency/ directory contains scripts to assess code reliability across syntax and functionality. These evaluations are currently manual or semi-automated and aligned with the schema described in the paper.
-Future Additions
 
-    Prompt templates and persona definitions
+## Future Additions
 
-    CSV export of the evaluation spreadsheet
+#### Prompt templates and persona definitions
 
-    Additional aggregate analysis scripts
+#### CSV export of the evaluation spreadsheet
+
+#### Additional aggregate analysis scripts
